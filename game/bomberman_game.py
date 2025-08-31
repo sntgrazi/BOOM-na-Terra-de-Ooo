@@ -200,6 +200,7 @@ class BombermanGame:
                 SCREEN_WIDTH // 2 - button_width // 2,
                 SCREEN_HEIGHT // 2 + 110, 
                 button_width, button_height
+                
             )
             
             if next_button_rect.collidepoint(pos):
@@ -286,6 +287,7 @@ class BombermanGame:
                 explosion = bomb.explode(self.game_map)
                 self.explosions.append(explosion)
                 self.bombs.remove(bomb)
+                print(f"💥 Bomba explodiu! Bombas restantes: {len([b for b in self.bombs if b.owner == self.player.character])}/{self.player.max_bombs}")
                 self.audio_manager.play_explosion_sound()
     
     def update_explosions(self, dt):
@@ -304,11 +306,19 @@ class BombermanGame:
         
         # Colisão jogador com explosões
         for explosion in self.explosions:
-            for tile_x, tile_y in explosion.tiles:
-                explosion_rect = pygame.Rect(tile_x * TILE_SIZE, tile_y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
-                if player_rect.colliderect(explosion_rect):
-                    self.player_hit()
-                    return
+            # Verificar se a explosão pode atingir o jogador considerando obstáculos
+            bomb_pixel_x = explosion.bomb_x * TILE_SIZE
+            bomb_pixel_y = explosion.bomb_y * TILE_SIZE
+            
+            if self.game_map.can_explosion_reach_player(bomb_pixel_x, bomb_pixel_y, self.player.x, self.player.y):
+                # Verificar se o jogador está realmente em um tile de explosão
+                player_grid_x = int(self.player.x // TILE_SIZE)
+                player_grid_y = int(self.player.y // TILE_SIZE)
+                
+                for tile_x, tile_y in explosion.tiles:
+                    if tile_x == player_grid_x and tile_y == player_grid_y:
+                        self.player_hit()
+                        return
         
         # Colisão jogador com inimigos (verificar linha de visão)
         for enemy in self.enemies:
@@ -323,14 +333,21 @@ class BombermanGame:
             if not enemy.alive:
                 continue
             
-            enemy_rect = enemy.get_rect()
             for explosion in self.explosions:
-                for tile_x, tile_y in explosion.tiles:
-                    explosion_rect = pygame.Rect(tile_x * TILE_SIZE, tile_y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
-                    if enemy_rect.colliderect(explosion_rect):
-                        enemy.alive = False
-                        self.score += 100
-                        break
+                # Verificar se a explosão pode atingir o inimigo considerando obstáculos
+                bomb_pixel_x = explosion.bomb_x * TILE_SIZE
+                bomb_pixel_y = explosion.bomb_y * TILE_SIZE
+                
+                if self.game_map.can_explosion_reach_player(bomb_pixel_x, bomb_pixel_y, enemy.x, enemy.y):
+                    # Verificar se o inimigo está realmente em um tile de explosão
+                    enemy_grid_x = int(enemy.x // TILE_SIZE)
+                    enemy_grid_y = int(enemy.y // TILE_SIZE)
+                    
+                    for tile_x, tile_y in explosion.tiles:
+                        if tile_x == enemy_grid_x and tile_y == enemy_grid_y:
+                            enemy.alive = False
+                            self.score += 100
+                            break
     
     def check_win_lose_conditions(self):
         """Verifica condições de vitória e derrota"""
@@ -352,8 +369,9 @@ class BombermanGame:
             return
         
         # Verificar se pode colocar mais bombas
-        player_bombs = [bomb for bomb in self.bombs if bomb.owner == "player"]
+        player_bombs = [bomb for bomb in self.bombs if bomb.owner == self.player.character]
         if len(player_bombs) >= self.player.max_bombs:
+            print(f"🚫 Limite de bombas atingido! ({len(player_bombs)}/{self.player.max_bombs})")
             return
         
         # Posição da bomba
@@ -367,6 +385,7 @@ class BombermanGame:
         # Criar nova bomba
         new_bomb = Bomb(grid_x, grid_y, self.player.bomb_range, self.player.character)
         self.bombs.append(new_bomb)
+        print(f"💣 Bomba criada! Total: {len([b for b in self.bombs if b.owner == self.player.character])}/{self.player.max_bombs}")
         
         # Não adicionar ao grid ainda (sistema fantasma)
         self.audio_manager.play_bomb_sound()
@@ -436,22 +455,49 @@ class BombermanGame:
         print(f"🎮 Jogo iniciado - Nível {self.level}")
     
     def create_enemies(self):
-        """Cria os inimigos do nível"""
+        """Cria os inimigos do nível nos cantos específicos - POSIÇÕES GARANTIDAS"""
         self.enemies = []
         
         # Personagens inimigos (exceto o selecionado)
         enemy_characters = [char for char in Characters.ALL if char != self.selected_character]
         
-        # Posições válidas para spawn
-        positions = self.game_map.get_valid_spawn_positions()
+        # 🎯 POSIÇÕES FIXAS E GARANTIDAS DOS CANTOS
+        # Agora que os cantos estão livres no mapa, usar posições exatas
+        corner_positions = [
+            (COLS - 2, 1),        # Canto superior direito
+            (1, ROWS - 2),        # Canto inferior esquerdo  
+            (COLS - 2, ROWS - 2), # Canto inferior direito
+        ]
         
-        # Criar exatamente 3 inimigos
-        for i, character in enumerate(enemy_characters):
-            if positions and i < 3:
-                pos = random.choice(positions)
-                positions.remove(pos)
-                enemy = Enemy(pos[0], pos[1], character)
-                self.enemies.append(enemy)
+        corner_names = ["superior direito", "inferior esquerdo", "inferior direito"]
+        
+        print(f"🎯 Criando inimigos nas posições garantidas dos cantos:")
+        
+        # Criar inimigos diretamente nas posições (que agora são garantidas como livres)
+        for i, character in enumerate(enemy_characters[:3]):  # Máximo 3 inimigos
+            if i < len(corner_positions):
+                pos = corner_positions[i]
+                x, y = pos
+                
+                # Verificação adicional de segurança (não deveria falhar mais)
+                if (0 <= x < COLS and 0 <= y < ROWS and 
+                    self.game_map.is_walkable(x, y)):
+                    
+                    enemy = Enemy(x, y, character)
+                    self.enemies.append(enemy)
+                    corner_name = corner_names[i]
+                    print(f"🤖 Inimigo {character} criado no canto {corner_name}: ({x}, {y}) ✅")
+                else:
+                    print(f"❌ ERRO: Posição ({x}, {y}) ainda não é walkable - verificar geração do mapa")
+            else:
+                print(f"⚠️ Limite de posições atingido - {character} não foi criado")
+        
+        print(f"🎯 Total de inimigos criados: {len(self.enemies)}")
+        
+        if len(self.enemies) == 0:
+            print("💀 ERRO CRÍTICO: Nenhum inimigo pôde ser criado!")
+        elif len(self.enemies) < 3:
+            print(f"⚠️ AVISO: Apenas {len(self.enemies)}/3 inimigos criados")
     
     def restart_game(self):
         """Reinicia o jogo"""

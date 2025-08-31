@@ -24,9 +24,18 @@ class GameMap:
             self.grid.append(row)
     
     def generate_level(self, level=1):
-        """Gera um nível do jogo usando o sistema de 3 camadas"""
+        """Gera um nível do jogo usando o sistema de 3 camadas com temas"""
         self.powerups = []
         self.init_empty_map()
+        
+        # 🎨 ALTERAR TEMA DO MAPA BASEADO NO NÍVEL
+        if (self.sprite_manager and 
+            hasattr(self.sprite_manager, 'get_theme_for_level') and
+            hasattr(self.sprite_manager, 'set_map_theme')):
+            
+            new_theme = self.sprite_manager.get_theme_for_level(level)
+            self.sprite_manager.set_map_theme(new_theme)
+            print(f"🎨 Nível {level}: Usando tema '{new_theme}'")
         
         # 🗺️ Se temos sprite_manager com grid de colisão, usar ele
         if (self.sprite_manager and 
@@ -137,6 +146,44 @@ class GameMap:
         
         return True
     
+    def can_explosion_reach_player(self, explosion_x, explosion_y, player_x, player_y):
+        """Verifica se uma explosão pode atingir um jogador considerando obstáculos"""
+        # Converter posições de pixel para grid
+        exp_grid_x = int(explosion_x // TILE_SIZE)
+        exp_grid_y = int(explosion_y // TILE_SIZE)
+        player_grid_x = int(player_x // TILE_SIZE)
+        player_grid_y = int(player_y // TILE_SIZE)
+        
+        # Se estão no mesmo tile, sempre atinge
+        if exp_grid_x == player_grid_x and exp_grid_y == player_grid_y:
+            return True
+        
+        # Verificar se estão na mesma linha ou coluna (explosão em cruz)
+        if exp_grid_x == player_grid_x:  # Mesma coluna
+            start_y = min(exp_grid_y, player_grid_y)
+            end_y = max(exp_grid_y, player_grid_y)
+            
+            # Verificar se há blocos sólidos no caminho
+            for y in range(start_y + 1, end_y):  # Não incluir origem e destino
+                tile_type = self.get_tile(exp_grid_x, y)
+                if tile_type in [TileType.WALL, TileType.BRICK]:
+                    return False  # Bloqueado por obstáculo
+                    
+        elif exp_grid_y == player_grid_y:  # Mesma linha
+            start_x = min(exp_grid_x, player_grid_x)
+            end_x = max(exp_grid_x, player_grid_x)
+            
+            # Verificar se há blocos sólidos no caminho
+            for x in range(start_x + 1, end_x):  # Não incluir origem e destino
+                tile_type = self.get_tile(x, exp_grid_y)
+                if tile_type in [TileType.WALL, TileType.BRICK]:
+                    return False  # Bloqueado por obstáculo
+        else:
+            # Não está na mesma linha nem coluna, explosão não atinge
+            return False
+        
+        return True
+
     def set_tile(self, x, y, tile_type):
         """Define o tipo de tile na posição especificada"""
         if 0 <= x < COLS and 0 <= y < ROWS:
@@ -264,6 +311,46 @@ class GameMap:
                     valid_positions.append((x, y))
         
         return valid_positions
+
+    def get_corner_spawn_positions_with_space(self, min_space=3):
+        """Retorna posições nos cantos com pelo menos min_space blocos livres ao redor"""
+        corner_positions = []
+        
+        # Definir cantos estratégicos
+        corners = [
+            (COLS - 2, 1),         # Canto superior direito
+            (COLS - 2, ROWS - 2),  # Canto inferior direito  
+            (1, ROWS - 2),         # Canto inferior esquerdo
+            (COLS//2, 1),          # Centro superior
+        ]
+        
+        for x, y in corners:
+            if self.has_free_space_around(x, y, min_space):
+                corner_positions.append((x, y))
+                
+        return corner_positions
+    
+    def has_free_space_around(self, center_x, center_y, min_radius):
+        """Verifica se há pelo menos min_radius blocos livres ao redor da posição"""
+        if not self.is_walkable(center_x, center_y):
+            return False
+            
+        free_count = 0
+        
+        # Verificar área ao redor
+        for dy in range(-min_radius, min_radius + 1):
+            for dx in range(-min_radius, min_radius + 1):
+                check_x = center_x + dx
+                check_y = center_y + dy
+                
+                # Verificar limites
+                if 0 <= check_x < COLS and 0 <= check_y < ROWS:
+                    if self.is_walkable(check_x, check_y):
+                        free_count += 1
+        
+        # Precisa de pelo menos metade dos blocos livres na área
+        total_area = (2 * min_radius + 1) ** 2
+        return free_count >= total_area * 0.5
     
     def count_destructible_blocks(self):
         """Conta quantos blocos destrutíveis existem no mapa"""

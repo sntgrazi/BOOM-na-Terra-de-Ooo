@@ -41,6 +41,7 @@ class SpriteManager:
         
         # � CARREGAR BOMBAS ESPECÍFICAS POR PERSONAGEM
         self.load_character_bombs()
+        self.load_powerup_sprites()  # ⭐ CARREGAR SPRITES DE POWER-UPS
         
         # �🗺️ CARREGAR MAPA DE FUNDO
         self.load_background_map()
@@ -595,71 +596,158 @@ class SpriteManager:
         
         print(f"✅ {len([b for b in self.character_bombs.values() if b is not None])} bombas de personagem carregadas")
 
-    def load_background_map(self):
-        """Carrega imagem de fundo e sprites de blocos para sistema em camadas"""
-        # 🖼️ CARREGAR FUNDO DECORATIVO
-        map_path = "images/mapa.png"
-        if os.path.exists(map_path):
-            try:
-                map_image = pygame.image.load(map_path)
-                from .constants import SCREEN_WIDTH, SCREEN_HEIGHT
-                self.background_map = pygame.transform.scale(map_image, (SCREEN_WIDTH, SCREEN_HEIGHT))
-                
-                print(f"✅ Mapa de fundo carregado: {map_path}")
-                self.images['background_map'] = {'default': self.background_map}
-                self.images_loaded['background_map'] = True
-                
-            except Exception as e:
-                print(f"❌ Erro ao carregar mapa de fundo: {e}")
-                self.background_map = None
-                self.images_loaded['background_map'] = False
-        else:
-            print(f"❌ Mapa de fundo não encontrado: {map_path}")
-            self.background_map = None
-            self.images_loaded['background_map'] = False
+    def load_powerup_sprites(self):
+        """Carrega sprites específicas dos power-ups"""
+        # Mapeamento de tipos de power-up para seus arquivos
+        powerup_files = {
+            "powerup_bomb": "images/power_up_extra_bomb.png",
+            "powerup_range": "images/power_up_fire_power.png", 
+            "powerup_speed": "images/power_up_speed.png"
+        }
         
-        # 🧱 CARREGAR SPRITES DE BLOCOS
-        self.load_block_sprites()
+        # Inicializar dicionário de sprites de power-ups
+        for powerup_name, powerup_path in powerup_files.items():
+            if os.path.exists(powerup_path):
+                try:
+                    powerup_sprite = pygame.image.load(powerup_path).convert_alpha()
+                    powerup_sprite = self.scale_sprite_proportional(powerup_sprite, TILE_SIZE)
+                    
+                    self.images[powerup_name] = {'default': powerup_sprite}
+                    self.images_loaded[powerup_name] = True
+                    print(f"✅ Power-up {powerup_name} carregado: {powerup_path}")
+                    
+                except Exception as e:
+                    print(f"❌ Erro ao carregar power-up {powerup_name}: {e}")
+                    self.images_loaded[powerup_name] = False
+            else:
+                print(f"⚠️ Power-up não encontrado: {powerup_path}")
+                self.images_loaded[powerup_name] = False
+        
+        print(f"✅ {len([name for name in powerup_files.keys() if self.images_loaded.get(name, False)])} sprites de power-up carregadas")
+
+    def load_background_map(self):
+        """Carrega imagens de fundo e sprites de blocos para múltiplos temas"""
+        # 🗺️ CARREGAR MÚLTIPLOS TEMAS DE MAPA
+        self.map_themes = {}
+        self.current_theme = "default"
+        
+        # Tema padrão (Reino de Ooo)
+        self.load_map_theme("default", {
+            'background': "images/mapa.png",
+            'wall': "images/bloco-estrutural.png", 
+            'brick': "images/bloco-destrutivel.png"
+        })
+        
+        # Tema Reino Doce
+        self.load_map_theme("candy", {
+            'background': "images/mapa_reino_doce.png",
+            'wall': "images/bloco-estrutural-reino-doce.png",
+            'brick': "images/bloco-destrutivel-reino-doce.png"
+        })
+        
+        # Tema Reino do Fogo
+        self.load_map_theme("fire", {
+            'background': "images/mapa-reino-fogo.png",
+            'wall': "images/bloco-estrutural-reino-fogo.png",
+            'brick': "images/bloco-destrutivel-reino-fogo.png"
+        })
+        
+        # Definir tema atual como padrão
+        self.set_map_theme("default")
         
         # 🗺️ GERAR MAPA DE COLISÃO SIMPLES (sem análise de pixel)
         self.generate_simple_collision_grid()
     
-    def load_block_sprites(self):
-        """Carrega sprites dos blocos estruturais e destrutíveis"""
-        # 🧱 BLOCO ESTRUTURAL (indestrutível)
-        wall_path = "images/bloco-estrutural.png"
+    def load_map_theme(self, theme_name, theme_paths):
+        """Carrega um tema de mapa específico"""
+        theme_data = {}
+        
+        # Carregar fundo
+        background_path = theme_paths['background']
+        if os.path.exists(background_path):
+            try:
+                from .constants import SCREEN_WIDTH, SCREEN_HEIGHT
+                map_image = pygame.image.load(background_path)
+                theme_data['background'] = pygame.transform.scale(map_image, (SCREEN_WIDTH, SCREEN_HEIGHT))
+                print(f"✅ Fundo do tema '{theme_name}' carregado: {background_path}")
+            except Exception as e:
+                print(f"❌ Erro ao carregar fundo do tema '{theme_name}': {e}")
+                theme_data['background'] = None
+        else:
+            print(f"⚠️ Fundo do tema '{theme_name}' não encontrado: {background_path}")
+            theme_data['background'] = None
+        
+        # Carregar blocos estruturais
+        wall_path = theme_paths['wall']
         if os.path.exists(wall_path):
             try:
                 wall_image = pygame.image.load(wall_path).convert_alpha()
-                wall_image = self.scale_sprite_proportional(wall_image, TILE_SIZE)
-                self.images['wall'] = {'default': wall_image}
-                self.images_loaded['wall'] = True
-                print(f"✅ Sprite de bloco estrutural carregado: {wall_path}")
+                theme_data['wall'] = self.scale_sprite_proportional(wall_image, TILE_SIZE)
+                print(f"✅ Blocos estruturais do tema '{theme_name}' carregados: {wall_path}")
             except Exception as e:
-                print(f"❌ Erro ao carregar bloco estrutural: {e}")
-                self.images_loaded['wall'] = False
+                print(f"❌ Erro ao carregar blocos estruturais do tema '{theme_name}': {e}")
+                theme_data['wall'] = None
         else:
-            print(f"❌ Sprite de bloco estrutural não encontrado: {wall_path}")
-            self.images_loaded['wall'] = False
+            print(f"⚠️ Blocos estruturais do tema '{theme_name}' não encontrados: {wall_path}")
+            theme_data['wall'] = None
         
-        # 🧱 BLOCO DESTRUTÍVEL
-        brick_path = "images/bloco-destrutivel.png"
+        # Carregar blocos destrutíveis
+        brick_path = theme_paths['brick']
         if os.path.exists(brick_path):
             try:
                 brick_image = pygame.image.load(brick_path).convert_alpha()
-                brick_image = self.scale_sprite_proportional(brick_image, TILE_SIZE)
-                self.images['brick'] = {'default': brick_image}
-                self.images_loaded['brick'] = True
-                print(f"✅ Sprite de bloco destrutível carregado: {brick_path}")
+                theme_data['brick'] = self.scale_sprite_proportional(brick_image, TILE_SIZE)
+                print(f"✅ Blocos destrutíveis do tema '{theme_name}' carregados: {brick_path}")
             except Exception as e:
-                print(f"❌ Erro ao carregar bloco destrutível: {e}")
-                self.images_loaded['brick'] = False
+                print(f"❌ Erro ao carregar blocos destrutíveis do tema '{theme_name}': {e}")
+                theme_data['brick'] = None
         else:
-            print(f"❌ Sprite de bloco destrutível não encontrado: {brick_path}")
-            self.images_loaded['brick'] = False
+            print(f"⚠️ Blocos destrutíveis do tema '{theme_name}' não encontrados: {brick_path}")
+            theme_data['brick'] = None
+        
+        self.map_themes[theme_name] = theme_data
+    
+    def set_map_theme(self, theme_name):
+        """Define o tema atual do mapa"""
+        if theme_name in self.map_themes:
+            self.current_theme = theme_name
+            theme_data = self.map_themes[theme_name]
+            
+            # Atualizar referências atuais
+            self.background_map = theme_data['background']
+            
+            # Atualizar sprites nos dicionários principais
+            if theme_data['wall']:
+                self.images['wall'] = {'default': theme_data['wall']}
+                self.images_loaded['wall'] = True
+            
+            if theme_data['brick']:
+                self.images['brick'] = {'default': theme_data['brick']}
+                self.images_loaded['brick'] = True
+            
+            if theme_data['background']:
+                self.images['background_map'] = {'default': theme_data['background']}
+                self.images_loaded['background_map'] = True
+            
+            print(f"🎨 Tema de mapa alterado para: {theme_name}")
+            return True
+        else:
+            print(f"❌ Tema '{theme_name}' não encontrado!")
+            return False
+    
+    def get_theme_for_level(self, level):
+        """Retorna o tema apropriado para o nível"""
+        if level % 3 == 1:
+            return "default"  # Reino de Ooo
+        elif level % 3 == 2:
+            return "candy"    # Reino Doce
+        else:
+            return "fire"     # Reino do Fogo
+    
+    # Método load_block_sprites removido - agora os blocos são carregados por tema
     
     def generate_simple_collision_grid(self):
-        """Gera um grid de colisão simples no estilo Bomberman clássico"""
+        """Gera um grid de colisão simples no estilo Bomberman clássico - COM CANTOS LIVRES"""
         from .constants import TILE_SIZE, COLS, ROWS
         
         self.collision_grid = []
@@ -672,18 +760,38 @@ class SpriteManager:
                 # Padrão clássico do Bomberman:
                 # - Bordas são sempre paredes (indestrutíveis)
                 # - Posições ímpares tanto em x quanto em y são paredes estruturais
-                # - Áreas próximas ao spawn do jogador são livres
+                # - TODOS OS 4 CANTOS devem ter áreas livres para inimigos
                 # - Outras posições podem ter blocos destrutíveis
                 
                 is_border = (col == 0 or col == COLS-1 or row == 0 or row == ROWS-1)
                 is_structural_position = (col % 2 == 1 and row % 2 == 1)
-                is_player_spawn_area = ((col <= 2 and row <= 2) or  # Canto superior esquerdo
-                                       (col >= COLS-3 and row >= ROWS-3))  # Canto inferior direito
                 
-                if is_border or is_structural_position:
+                # ✨ ÁREAS LIVRES OBRIGATÓRIAS - TODOS OS 4 CANTOS
+                is_spawn_area = (
+                    # Canto superior esquerdo (player) - 3x3
+                    (col <= 2 and row <= 2) or  
+                    # Canto superior direito (inimigo 1) - 3x3
+                    (col >= COLS-3 and row <= 2) or
+                    # Canto inferior esquerdo (inimigo 2) - 3x3  
+                    (col <= 2 and row >= ROWS-3) or
+                    # Canto inferior direito (inimigo 3) - 3x3
+                    (col >= COLS-3 and row >= ROWS-3)
+                )
+                
+                if is_border:
                     collision_row.append(2)  # 2 = parede estrutural (indestrutível)
-                elif is_player_spawn_area:
-                    collision_row.append(0)  # 0 = espaço livre
+                elif is_spawn_area:
+                    # GARANTIR que cantos fiquem livres, mas manter alguns blocos estruturais centrais
+                    if is_structural_position and not (
+                        # Exceções: posições específicas nos cantos que devem ficar livres
+                        (col == 1 and row == 1) or (col == COLS-2 and row == 1) or
+                        (col == 1 and row == ROWS-2) or (col == COLS-2 and row == ROWS-2)
+                    ):
+                        collision_row.append(2)  # Manter estrutura nos cantos
+                    else:
+                        collision_row.append(0)  # 0 = espaço livre GARANTIDO
+                elif is_structural_position:
+                    collision_row.append(2)  # 2 = parede estrutural (indestrutível)
                 else:
                     # 60% de chance de ter bloco destrutível
                     if random.random() < 0.6:
@@ -694,6 +802,11 @@ class SpriteManager:
             self.collision_grid.append(collision_row)
         
         print(f"✅ Grid de colisão gerado: {COLS}x{ROWS}")
+        print("🎯 Cantos reservados para spawns:")
+        print(f"   🟩 Superior esquerdo (player): (1-2, 1-2)")
+        print(f"   🟦 Superior direito (inimigo): ({COLS-3}-{COLS-2}, 1-2)")
+        print(f"   🟨 Inferior esquerdo (inimigo): (1-2, {ROWS-3}-{ROWS-2})")
+        print(f"   🟪 Inferior direito (inimigo): ({COLS-3}-{COLS-2}, {ROWS-3}-{ROWS-2})")
         
         # Debug: mostrar algumas posições do grid
         print("🗺️ Amostra do grid de colisão:")
