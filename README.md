@@ -2,6 +2,18 @@
 
 Bem-vindo à Terra de Ooo! Junte-se a Finn, Jake e outros heróis em uma aventura explosiva cheia de ação e estratégia. Coloque bombas, derrote inimigos e explore os reinos mágicos neste jogo inspirado no clássico Bomberman, mas com todo o charme e diversão do Adventure Time!
 
+## ⚡ Início Rápido
+
+```bash
+# 1. Instale as dependências
+pip install pygame numpy
+
+# 2. Execute o jogo
+python main.py
+
+# Pronto! Que a aventura comece! 🎮
+```
+
 ## 🌟 O que é BOOM na Terra de Ooo?
 
 BOOM na Terra de Ooo é um jogo de ação e estratégia onde você controla seus personagens favoritos do Adventure Time em batalhas explosivas. Navegue pelos diferentes reinos, use bombas estrategicamente para derrotar inimigos e colete power-ups para se tornar ainda mais poderoso!
@@ -37,47 +49,45 @@ BOOM na Terra de Ooo é um jogo de ação e estratégia onde você controla seus
 
 ## 🚀 Como Começar Sua Aventura
 
-### 💻 Opção 1: Executável Windows (Recomendado)
-**A maneira mais fácil de jogar!**
+### Pré-requisitos
+- **Python 3.8 ou superior** - [Baixe aqui](https://python.org/downloads)
+- **pip** (gerenciador de pacotes do Python - já vem com Python)
 
-1. **Gerar o executável:**
-   - Execute o arquivo `build_executable.bat`
-   - Aguarde o processo de build (pode demorar alguns minutos)
+### 🎮 Executar o Jogo
 
-2. **Jogar:**
-   - Vá para a pasta `dist\BOOM na Terra de Ooo\`
-   - Execute `BOOM na Terra de Ooo.exe`
-   - Pronto! Seu jogo está rodando! 🎮
-
-**Vantagens do executável:**
-- ✅ Não precisa instalar Python
-- ✅ Funciona em qualquer PC Windows
-- ✅ Pode ser copiado para outros computadores
-- ✅ Inicialização mais rápida
-
-### 🐍 Opção 2: Executar com Python
-
-#### Pré-requisitos
-- Python 3.8 ou superior
-- pip (gerenciador de pacotes do Python)
-
-#### Instalação Rápida (Windows)
-1. Execute o arquivo `install_and_run.bat`
-2. O script instalará tudo automaticamente e iniciará o jogo!
-
-#### Instalação Rápida (Linux/Mac)
-1. Execute o arquivo `install_and_run.sh`
-2. O script instalará tudo automaticamente e iniciará o jogo!
-
-#### Instalação Manual
-1. Instale as dependências mágicas:
+1. **Instale as dependências:**
    ```bash
-   pip install -r requirements.txt
+   pip install pygame numpy
    ```
-2. Inicie sua aventura:
+
+2. **Execute o jogo:**
    ```bash
    python main.py
    ```
+
+### 🔧 Comandos Úteis
+
+```bash
+# Verificar se Python está instalado
+python --version
+
+# Verificar se pip está funcionando
+pip --version
+
+# Instalar dependências específicas
+
+
+
+
+
+
+
+pip install pygame==2.6.1 numpy==1.21.0
+
+
+# Executar o jogo diretamente
+python main.py
+```
 
 ## 🗺️ Explorando os Reinos
 
@@ -91,26 +101,23 @@ O jogo inclui diferentes temas baseados nos reinos do Adventure Time:
 
 ```
 boom-terra-de-ooo/
-├── main.py                 # Portal principal para a Terra de Ooo
-├── requirements.txt        # Ingredientes mágicos necessários
-├── install_and_run.bat    # Script de aventura (Windows)
-├── install_and_run.sh     # Script de aventura (Linux/Mac)
+├── main.py                 # 🚀 Execute este arquivo para jogar!
 ├── game/                  # Módulo principal da aventura
 │   ├── __init__.py
-│   ├── constants.py       # Regras da Terra de Ooo
-│   ├── bomberman_game.py  # Motor da aventura
-│   ├── entities.py        # Heróis, vilões e bombas
-│   ├── game_map.py        # Mapas dos reinos
-│   ├── sprites.py         # Aparência dos personagens
-│   ├── audio.py           # Sons da aventura
-│   └── ui.py             # Interface mágica
-├── images/               # Retratos dos heróis
+│   ├── constants.py       # Configurações do jogo
+│   ├── bomberman_game.py  # Motor principal do jogo
+│   ├── entities.py        # Jogadores, inimigos e bombas
+│   ├── game_map.py        # Sistema de mapas
+│   ├── sprites.py         # Gráficos e animações
+│   ├── audio.py           # Sistema de áudio
+│   └── ui.py             # Interface do usuário
+├── images/               # Sprites dos personagens
 │   ├── finn_idle.png
 │   ├── jake_idle_down.png
 │   ├── marceline_idle_down.png
 │   └── [outros sprites...]
 ├── sounds/               # Efeitos sonoros
-└── README.md             # Este pergaminho
+└── README.md             # Este arquivo
 ```
 
 ## 🛠️ Tecnologias Mágicas Utilizadas

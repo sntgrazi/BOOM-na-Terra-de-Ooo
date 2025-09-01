@@ -528,6 +528,14 @@ class BombermanGame:
             self.state = GameState.PLAYING
             self.audio_manager.start_background_music()
     
+    def return_to_menu(self):
+        self.state = GameState.START
+        self.audio_manager.stop_background_music()
+        
+    def next_level(self):
+        self.level += 1
+        self.start_game()
+    
     def render(self):
       
         self.screen.fill(Colors.BLACK)
