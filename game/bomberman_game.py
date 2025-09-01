@@ -36,7 +36,7 @@ class BombermanGame:
         self.keys = {}
         self.key_pressed = {}
         
-        print("🎮 Jogo Bomberman inicializado!")
+        print("🎮 Jogo BOOM na Terra de Ooo inicializado!")
     
     def run(self):
        
@@ -47,7 +47,7 @@ class BombermanGame:
             self.update(dt)
             self.render()
         
-        # Cleanup
+        
         self.audio_manager.cleanup()
     
     def handle_events(self):
@@ -120,13 +120,12 @@ class BombermanGame:
             elif key == pygame.K_ESCAPE:
                 self.state = GameState.START
         
-        # Mute em qualquer estado
+        
         if key == pygame.K_m:
             self.audio_manager.toggle_mute()
     
     def handle_mouse_click(self, pos):
-        """Gerencia cliques do mouse"""
-        # Verificar clique no botão mute (sempre disponível)
+        
         button_size = 40
         mute_button_x = SCREEN_WIDTH - button_size - 10
         mute_button_y = 10
@@ -134,10 +133,10 @@ class BombermanGame:
         
         if mute_button_rect.collidepoint(pos):
             self.audio_manager.toggle_mute()
-            return  # Não processar outros cliques se clicou no mute
+            return  
         
         if self.state == GameState.START:
-            # Verificar clique no botão iniciar
+            
             button_width, button_height = 200, 50
             button_x = SCREEN_WIDTH // 2 - button_width // 2
             button_y = SCREEN_HEIGHT // 2
@@ -148,7 +147,7 @@ class BombermanGame:
                 self.start_character_select()
         
         elif self.state == GameState.CHARACTER_SELECT:
-            # Verificar clique nos personagens
+            
             character_size = 120
             spacing = 80
             start_x = SCREEN_WIDTH // 2 - character_size - spacing // 2
@@ -168,7 +167,7 @@ class BombermanGame:
                     break
         
         elif self.state == GameState.GAME_OVER:
-            # Verificar cliques nos botões de game over
+            
             button_width, button_height = 180, 40
             restart_button_rect = pygame.Rect(
                 SCREEN_WIDTH // 2 - button_width // 2, 
@@ -189,7 +188,7 @@ class BombermanGame:
                 self.return_to_menu()
         
         elif self.state == GameState.VICTORY:
-            # Verificar cliques nos botões de vitória
+            
             button_width, button_height = 180, 40
             next_button_rect = pygame.Rect(
                 SCREEN_WIDTH // 2 - button_width // 2,
@@ -211,57 +210,56 @@ class BombermanGame:
                 self.return_to_menu()
     
     def update(self, dt):
-        """Atualiza o jogo"""
+        
         self.ui.update(dt)
         
-        # Limpar teclas pressionadas
+        
         self.key_pressed = {}
         
         if self.state == GameState.PLAYING:
             self.update_game(dt)
         elif self.state == GameState.CHARACTER_SELECT:
-            # Atualizar inimigos de demonstração
+            
             for enemy in self.enemies:
                 enemy.update(dt, self.game_map, self.player, self.bombs)
     
     def update_game(self, dt):
-        """Atualiza o estado do jogo durante o gameplay"""
-        # 🎬 Atualizar animações (especialmente do Finn)
+        
         self.sprite_manager.update_animations()
         
-        # Atualizar jogador
+        
         self.update_player(dt)
         
-        # Atualizar inimigos
-        for enemy in self.enemies[:]:  # Cópia da lista
+        
+        for enemy in self.enemies[:]:  
             if enemy.alive:
                 enemy.update(dt, self.game_map, self.player, self.bombs)
         
-        # Atualizar bombas
+        
         self.update_bombs(dt)
         
-        # Atualizar explosões
+        
         self.update_explosions(dt)
         
-        # Atualizar power-ups
+        
         if self.game_map.update_powerups(dt, self.player):
             self.score += 50
             self.audio_manager.play_powerup_sound()
         
-        # Verificar colisões
+        
         self.check_collisions()
         
-        # Verificar condições de vitória/derrota
+        
         self.check_win_lose_conditions()
     
     def update_player(self, dt):
-        """Atualiza o jogador baseado no input"""
+        
         if not self.player:
             return
         
         self.player.update(dt)
         
-        # Movimento
+        
         dx, dy = 0, 0
         if self.keys.get(pygame.K_a) or self.keys.get(pygame.K_LEFT):
             dx = -1
@@ -271,19 +269,18 @@ class BombermanGame:
             dy = -1
         if self.keys.get(pygame.K_s) or self.keys.get(pygame.K_DOWN):
             dy = 1
-            # print(f"DEBUG: Tecla S pressionada! dx={dx}, dy={dy}")
-            # print(f"DEBUG: Posição atual do jogador: x={self.player.x}, y={self.player.y}")
+            
         
         if dx != 0 or dy != 0:
             self.player.move(dx, dy, self.game_map, self.bombs)
     
     def update_bombs(self, dt):
-        """Atualiza as bombas"""
-        for bomb in self.bombs[:]:  # Cópia da lista
+       
+        for bomb in self.bombs[:]:  
             should_explode = bomb.update(dt, self.game_map, self.player)
             
             if should_explode:
-                # Explodir bomba
+                
                 explosion = bomb.explode(self.game_map)
                 self.explosions.append(explosion)
                 self.bombs.remove(bomb)
@@ -291,27 +288,27 @@ class BombermanGame:
                 self.audio_manager.play_explosion_sound()
     
     def update_explosions(self, dt):
-        """Atualiza as explosões"""
-        for explosion in self.explosions[:]:  # Cópia da lista
+        
+        for explosion in self.explosions[:]: 
             explosion_ended = explosion.update(dt, self.game_map)
             if explosion_ended:
                 self.explosions.remove(explosion)
     
     def check_collisions(self):
-        """Verifica colisões entre entidades"""
+        
         if not self.player:
             return
         
         player_rect = self.player.get_rect()
         
-        # Colisão jogador com explosões
+        
         for explosion in self.explosions:
-            # Verificar se a explosão pode atingir o jogador considerando obstáculos
+           
             bomb_pixel_x = explosion.bomb_x * TILE_SIZE
             bomb_pixel_y = explosion.bomb_y * TILE_SIZE
             
             if self.game_map.can_explosion_reach_player(bomb_pixel_x, bomb_pixel_y, self.player.x, self.player.y):
-                # Verificar se o jogador está realmente em um tile de explosão
+                
                 player_grid_x = int(self.player.x // TILE_SIZE)
                 player_grid_y = int(self.player.y // TILE_SIZE)
                 
@@ -320,26 +317,26 @@ class BombermanGame:
                         self.player_hit()
                         return
         
-        # Colisão jogador com inimigos (verificar linha de visão)
+        
         for enemy in self.enemies:
             if enemy.alive and player_rect.colliderect(enemy.get_rect()):
-                # Verificar se há linha de visão clara (sem blocos sólidos entre eles)
+                
                 if self.game_map.has_clear_line_of_sight(self.player.x, self.player.y, enemy.x, enemy.y):
                     self.player_hit()
                     return
         
-        # Colisão inimigos com explosões
+       
         for enemy in self.enemies[:]:
             if not enemy.alive:
                 continue
             
             for explosion in self.explosions:
-                # Verificar se a explosão pode atingir o inimigo considerando obstáculos
+               
                 bomb_pixel_x = explosion.bomb_x * TILE_SIZE
                 bomb_pixel_y = explosion.bomb_y * TILE_SIZE
                 
                 if self.game_map.can_explosion_reach_player(bomb_pixel_x, bomb_pixel_y, enemy.x, enemy.y):
-                    # Verificar se o inimigo está realmente em um tile de explosão
+                  
                     enemy_grid_x = int(enemy.x // TILE_SIZE)
                     enemy_grid_y = int(enemy.y // TILE_SIZE)
                     
@@ -350,71 +347,71 @@ class BombermanGame:
                             break
     
     def check_win_lose_conditions(self):
-        """Verifica condições de vitória e derrota"""
+        
         if not self.player:
             return
         
-        # Derrota
+        
         if self.player.lives <= 0:
             self.game_over()
         
-        # Vitória (todos os inimigos mortos)
+        
         alive_enemies = [enemy for enemy in self.enemies if enemy.alive]
         if len(alive_enemies) == 0:
             self.victory()
     
     def place_bomb(self):
-        """Coloca uma bomba na posição do jogador"""
+        
         if not self.player:
             return
         
-        # Verificar se pode colocar mais bombas
+        
         player_bombs = [bomb for bomb in self.bombs if bomb.owner == self.player.character]
         if len(player_bombs) >= self.player.max_bombs:
             print(f"🚫 Limite de bombas atingido! ({len(player_bombs)}/{self.player.max_bombs})")
             return
         
-        # Posição da bomba
+        
         grid_x, grid_y = self.player.get_grid_pos()
         
-        # Verificar se já existe bomba nesta posição
+        
         for bomb in self.bombs:
             if bomb.grid_x == grid_x and bomb.grid_y == grid_y:
                 return
         
-        # Criar nova bomba
+        
         new_bomb = Bomb(grid_x, grid_y, self.player.bomb_range, self.player.character)
         self.bombs.append(new_bomb)
         print(f"💣 Bomba criada! Total: {len([b for b in self.bombs if b.owner == self.player.character])}/{self.player.max_bombs}")
         
-        # Não adicionar ao grid ainda (sistema fantasma)
+        
         self.audio_manager.play_bomb_sound()
     
     def player_hit(self):
-        """Jogador foi atingido"""
+        
         if not self.player:
             return
         
         self.player.lives -= 1
         
         if self.player.lives > 0:
-            # Resetar posição para um local seguro (evitar blocos estruturais)
-            self.player.x = 1 * TILE_SIZE  # Grid x = 1
-            self.player.y = 2 * TILE_SIZE  # Grid y = 2 (posição livre)
+            
+            self.player.x = 1 * TILE_SIZE  
+            self.player.y = 2 * TILE_SIZE  
         else:
             self.game_over()
     
     def start_character_select(self):
-        """Inicia a seleção de personagem"""
+        
         self.state = GameState.CHARACTER_SELECT
         
-        # Criar mapa de demonstração
+        
         self.game_map.generate_level(1)
         
-        # Criar jogador temporário para demonstração em posição livre
+        
         self.player = Player(1, 2, self.selected_character)
         
-        # Criar alguns inimigos para demonstração
+        
         self.enemies = []
         enemy_characters = [char for char in Characters.ALL if char != self.selected_character]
         positions = self.game_map.get_valid_spawn_positions()
@@ -429,57 +426,54 @@ class BombermanGame:
         self.audio_manager.play_menu_sound()
     
     def start_game(self):
-        """Inicia o jogo com o personagem selecionado"""
+       
         self.state = GameState.PLAYING
         
-        # Resetar estatísticas se for novo jogo
+       
         if self.level == 1:
             self.score = 0
         
-        # Gerar mapa
+   
         self.game_map.generate_level(self.level)
-        
-        # Criar jogador em posição livre (evitar blocos estruturais)
+ 
         self.player = Player(1, 2, self.selected_character)
         
-        # Criar inimigos
+      
         self.create_enemies()
         
-        # Limpar bombas e explosões
+    
         self.bombs = []
         self.explosions = []
-        
-        # Iniciar música
+      
         self.audio_manager.start_background_music()
         
         print(f"🎮 Jogo iniciado - Nível {self.level}")
     
     def create_enemies(self):
-        """Cria os inimigos do nível nos cantos específicos - POSIÇÕES GARANTIDAS"""
+        
         self.enemies = []
         
-        # Personagens inimigos (exceto o selecionado)
+       
         enemy_characters = [char for char in Characters.ALL if char != self.selected_character]
         
-        # 🎯 POSIÇÕES FIXAS E GARANTIDAS DOS CANTOS
-        # Agora que os cantos estão livres no mapa, usar posições exatas
+      
         corner_positions = [
-            (COLS - 2, 1),        # Canto superior direito
-            (1, ROWS - 2),        # Canto inferior esquerdo  
-            (COLS - 2, ROWS - 2), # Canto inferior direito
+            (COLS - 2, 1),       
+            (1, ROWS - 2),        
+            (COLS - 2, ROWS - 2), 
         ]
         
         corner_names = ["superior direito", "inferior esquerdo", "inferior direito"]
         
         print(f"🎯 Criando inimigos nas posições garantidas dos cantos:")
         
-        # Criar inimigos diretamente nas posições (que agora são garantidas como livres)
-        for i, character in enumerate(enemy_characters[:3]):  # Máximo 3 inimigos
+       
+        for i, character in enumerate(enemy_characters[:3]): 
             if i < len(corner_positions):
                 pos = corner_positions[i]
                 x, y = pos
                 
-                # Verificação adicional de segurança (não deveria falhar mais)
+               
                 if (0 <= x < COLS and 0 <= y < ROWS and 
                     self.game_map.is_walkable(x, y)):
                     
@@ -500,33 +494,33 @@ class BombermanGame:
             print(f"⚠️ AVISO: Apenas {len(self.enemies)}/3 inimigos criados")
     
     def restart_game(self):
-        """Reinicia o jogo"""
+       
         self.level = 1
         self.score = 0
         self.start_game()
     
     def next_level(self):
-        """Avança para o próximo nível"""
+      
         self.level += 1
-        self.score += 500 * self.level  # Bônus por completar nível
+        self.score += 500 * self.level 
         self.start_game()
     
     def game_over(self):
-        """Game over"""
+        
         self.state = GameState.GAME_OVER
         self.audio_manager.stop_background_music()
         self.audio_manager.play_game_over_sound()
         print(f"💀 Game Over - Pontuação: {self.score}, Nível: {self.level}")
     
     def victory(self):
-        """Vitória do nível"""
+        
         self.state = GameState.VICTORY
         self.score += 500 * self.level
         self.audio_manager.play_victory_sound()
         print(f"🏆 Vitória - Nível {self.level} completo!")
     
     def toggle_pause(self):
-        """Alterna pausa"""
+       
         if self.state == GameState.PLAYING:
             self.state = GameState.PAUSED
             self.audio_manager.stop_background_music()
@@ -535,7 +529,7 @@ class BombermanGame:
             self.audio_manager.start_background_music()
     
     def render(self):
-        """Renderiza o jogo"""
+      
         self.screen.fill(Colors.BLACK)
         
         if self.state == GameState.START:
@@ -555,30 +549,29 @@ class BombermanGame:
         elif self.state == GameState.VICTORY:
             self.ui.draw_victory_screen(self.score)
         
-        # Botão de mute sempre visível
+    
         mute_button = self.ui.draw_mute_button(self.audio_manager.is_muted)
         
         pygame.display.flip()
     
     def render_game(self):
-        """Renderiza o jogo durante o gameplay"""
-        # 🗺️ Tentar usar mapa de fundo primeiro
+       
         if not self.sprite_manager.draw_background_map(self.screen):
-            # Fallback: Fundo verde se não houver mapa
+            
             self.screen.fill((34, 139, 34))
         
-        # Renderizar elementos do mapa (paredes, blocos) sobre o fundo
+        
         self.game_map.render(self.screen, self.sprite_manager)
         
-        # Renderizar bombas
+       
         for bomb in self.bombs:
             self.sprite_manager.draw_sprite(
                 self.screen, "bomb", bomb.x, bomb.y, TILE_SIZE, 
                 blinking=bomb.blinking,
-                character=bomb.owner  # Adicionar personagem que criou a bomba
+                character=bomb.owner  
             )
         
-        # Renderizar jogador
+      
         if self.player:
             self.sprite_manager.draw_character(
                 self.screen, self.player.character, self.player.x, self.player.y,
@@ -586,7 +579,7 @@ class BombermanGame:
                 direction=self.player.direction
             )
         
-        # Renderizar inimigos
+       
         for enemy in self.enemies:
             if enemy.alive:
                 enemy_direction = getattr(enemy, 'direction', None)
@@ -596,11 +589,11 @@ class BombermanGame:
                     direction=enemy_direction
                 )
         
-        # HUD
+        
         bombs_count = self.player.max_bombs if self.player else 0
         self.ui.draw_game_screen(self.score, self.player.lives if self.player else 0, self.level, bombs_count)
         
-        # Overlay de pausa
+       
         if self.state == GameState.PAUSED:
             self.ui.draw_pause_overlay()
 

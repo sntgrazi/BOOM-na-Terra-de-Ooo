@@ -1,7 +1,3 @@
-"""
-Entidades do jogo: Jogador, Inimigos, Bombas, etc.
-"""
-
 import pygame
 import math
 import random
@@ -20,21 +16,17 @@ class Player:
         self.direction = Direction.DOWN
     
     def update(self, dt):
-        """Atualiza o jogador"""
-        pass  # Não precisa mais de animação
+        pass
     
     def move(self, dx, dy, game_map, bombs=None):
-        """Move o jogador se possível"""
         new_x = self.x + dx * self.speed
         new_y = self.y + dy * self.speed
         
-        # USAR MÉTODO ESPECÍFICO DO JOGADOR QUE IGNORA BOMBAS
         if game_map.can_player_move_to(new_x, new_y):
             self.x = new_x
             self.y = new_y
             self.is_moving = True
             
-            # Atualizar direção
             if dx > 0:
                 self.direction = Direction.RIGHT
             elif dx < 0:
@@ -47,14 +39,12 @@ class Player:
             self.is_moving = False
     
     def get_grid_pos(self):
-        """Retorna a posição no grid"""
         return (
             int((self.x + TILE_SIZE // 2) // TILE_SIZE),
             int((self.y + TILE_SIZE // 2) // TILE_SIZE)
         )
     
     def get_rect(self):
-        """Retorna o retângulo de colisão"""
         return pygame.Rect(self.x, self.y, TILE_SIZE, TILE_SIZE)
 
 class Enemy:
@@ -66,63 +56,83 @@ class Enemy:
         self.direction = random.randint(0, 3)
         self.last_direction_change = 0
         self.alive = True
-        self.is_moving = False  # 🎬 Para controlar animação
+        self.is_moving = False
         
-        # IA properties - SISTEMA ULTRA-SIMPLIFICADO
         self.max_bombs = 1
         self.bomb_range = 2
         self.last_bomb_time = 0
-        self.bomb_cooldown = random.randint(4000, 6000)  # 4-6 segundos
+        self.bomb_cooldown = random.randint(2000, 3000)
         self.spawn_time = pygame.time.get_ticks()
-        self.mode = "explore"  # explore, attack
+        self.mode = "explore"
         self.last_direction_change = pygame.time.get_ticks()
         
+        self.escape_direction = None
+        self.escape_mode_until = 0
+        
+        print(f"🤖 Inimigo {character} criado com cooldown inicial de {self.bomb_cooldown}ms")
+        
     def update(self, dt, game_map, player, bombs):
-        """Atualiza o inimigo com IA"""
         if not self.alive:
             return
         
         current_time = pygame.time.get_ticks()
         
-        # IA Decision Making
         self.update_ai_mode(player, bombs, current_time)
         
-        # 🚀 SISTEMA DE BOMBAS ULTRA-SIMPLIFICADO
-        if (current_time - self.last_bomb_time > self.bomb_cooldown and 
-            current_time - self.spawn_time > 5000):  # 5 segundos após spawn
-            
-            # Verificar se já tem bomba
+        time_since_last_bomb = current_time - self.last_bomb_time
+        time_since_spawn = current_time - self.spawn_time
+        
+        if time_since_last_bomb > self.bomb_cooldown and time_since_spawn > 2000:
             my_bombs = sum(1 for bomb in bombs if bomb.owner == self.character)
-            if my_bombs == 0:  # Só se não tiver bomba ativa
-                
-                # Calcular distância do jogador
+            
+            if my_bombs == 0:
                 grid_x, grid_y = self.get_grid_pos()
                 player_grid_x, player_grid_y = player.get_grid_pos()
-                distance = abs(grid_x - player_grid_x) + abs(grid_y - player_grid_y)
+                distance_to_player = abs(grid_x - player_grid_x) + abs(grid_y - player_grid_y)
                 
-                # Colocar bomba se jogador estiver próximo (2-4 tiles)
-                if 2 <= distance <= 4:
-                    # Verificar se tem pelo menos 1 direção para escapar
-                    can_escape = False
+                destructible_blocks = self.count_destructible_blocks_in_range(game_map, grid_x, grid_y)
+                player_nearby = distance_to_player <= 5
+                random_placement = random.random() < 0.4
+                
+                should_place_bomb = False
+                reason = ""
+                
+                if destructible_blocks > 0:
+                    should_place_bomb = True
+                    reason = f"quebrar {destructible_blocks} bloco(s) destrutível(is)"
+                elif player_nearby:
+                    should_place_bomb = True
+                    reason = f"atacar jogador (distância: {distance_to_player})"
+                elif random_placement:
+                    should_place_bomb = True
+                    reason = "exploração aleatória"
+                
+                if should_place_bomb:
+                    escape_routes = 0
+                    best_escape_direction = None
+                    
                     for direction in range(4):
                         dx, dy = Direction.DELTAS[direction]
                         test_x, test_y = grid_x + dx, grid_y + dy
+                        
                         if (0 <= test_x < COLS and 0 <= test_y < ROWS and 
                             game_map.is_walkable(test_x, test_y)):
-                            can_escape = True
-                            break
+                            escape_routes += 1
+                            if best_escape_direction is None:
+                                best_escape_direction = direction
                     
-                    if can_escape and random.random() < 0.3:  # 30% chance
-                        self.place_bomb(game_map, bombs, current_time)
-                        self.bomb_cooldown = random.randint(4000, 6000)  # 4-6 segundos
+                    if escape_routes >= 1:
+                        if self.place_bomb(game_map, bombs, current_time):
+                            self.escape_direction = best_escape_direction
+                            self.escape_mode_until = current_time + 4000
+                            print(f"💣✅ {self.character} colocou bomba para {reason}")
+                        
+                        self.bomb_cooldown = random.randint(2000, 3500)
         
-        # Movimento
         self.update_movement(game_map, bombs, player, current_time)
     
     def update_ai_mode(self, player, bombs, current_time):
-        """🧠 SISTEMA DE IA ULTRA-SIMPLIFICADO"""
-        # Só muda modo ocasionalmente para reduzir processamento
-        if random.random() < 0.01:  # 1% chance por frame
+        if random.random() < 0.01:
             distance_to_player = math.sqrt(
                 (player.x - self.x)**2 + (player.y - self.y)**2
             ) / TILE_SIZE
@@ -133,104 +143,85 @@ class Enemy:
                 self.mode = "explore"
     
     def assess_danger_level(self, bombs, current_time):
-        """Avalia o nível de perigo atual (0-3)"""
         grid_x, grid_y = self.get_grid_pos()
         max_danger = 0
         
         for bomb in bombs:
             danger = 0
             
-            # Verificar se está na linha de explosão
             if self.is_position_in_bomb_range(grid_x, grid_y, bomb):
                 time_left = BOMB_TIMER - (pygame.time.get_ticks() - bomb.timer)
                 manhattan_distance = abs(bomb.grid_x - grid_x) + abs(bomb.grid_y - grid_y)
                 
-                # Calcular perigo baseado no tempo e distância
-                if time_left < 1000:  # Menos de 1 segundo
-                    danger = 3  # Crítico
-                elif time_left < 2000:  # Menos de 2 segundos
-                    danger = 2  # Alto
-                elif manhattan_distance <= 1:  # Muito próximo
-                    danger = 2  # Alto
+                if time_left < 1000:
+                    danger = 3
+                elif time_left < 2000:
+                    danger = 2
+                elif manhattan_distance <= 1:
+                    danger = 2
                 else:
-                    danger = 1  # Moderado
+                    danger = 1
                 
-                # Se é própria bomba, reduzir um pouco o perigo
                 if bomb.owner == self.character and hasattr(self, 'post_bomb_grace_time'):
                     if current_time < self.post_bomb_grace_time:
                         danger = max(0, danger - 1)
             
-            # Verificar proximidade geral (mesmo fora da linha de explosão)
             else:
                 manhattan_distance = abs(bomb.grid_x - grid_x) + abs(bomb.grid_y - grid_y)
                 if manhattan_distance <= 2 and bomb.owner != self.character:
-                    danger = 1  # Perigo baixo por proximidade
+                    danger = 1
             
             max_danger = max(max_danger, danger)
         
         return max_danger
     
     def calculate_distance_to_player(self, player):
-        """Calcula distância até o jogador em tiles"""
         distance_pixels = math.sqrt(
             (player.x - self.x)**2 + (player.y - self.y)**2
         )
         return distance_pixels / TILE_SIZE
 
     def is_in_immediate_bomb_danger(self, bombs):
-        """Verifica se está em perigo imediato de alguma bomba (incluindo suas próprias!)"""
         grid_x, grid_y = self.get_grid_pos()
         
         for bomb in bombs:
-            # Verificar se está na linha de explosão
             if ((grid_x == bomb.grid_x and abs(grid_y - bomb.grid_y) <= bomb.explosion_range) or
                 (grid_y == bomb.grid_y and abs(grid_x - bomb.grid_x) <= bomb.explosion_range)):
                 
-                # ⚠️ INCLUIR PRÓPRIAS BOMBAS - inimigo deve fugir das suas próprias bombas!
                 return True
         return False
 
     def is_in_bomb_explosion_path(self, x, y, bomb):
-        """Verifica se a posição está no caminho da explosão da bomba - VERSÃO INTELIGENTE"""
-        # Se não está na mesma linha nem coluna, é seguro
         if x != bomb.grid_x and y != bomb.grid_y:
             return False
         
-        # Calcular distância da bomba
         if x == bomb.grid_x:
-            # Mesma coluna - verificar linha
             distance = abs(y - bomb.grid_y)
             if distance > bomb.explosion_range:
                 return False
             
-            # Verificar se há obstáculos no caminho da explosão
             min_y = min(y, bomb.grid_y)
             max_y = max(y, bomb.grid_y)
             
-            # Simular explosão - verificar se algum obstáculo bloqueia
             current_y = bomb.grid_y
             step = 1 if y > bomb.grid_y else -1
             
             while current_y != y:
                 current_y += step
-                # Se encontrou um obstáculo antes de chegar na posição, está seguro
                 if hasattr(self, '_temp_game_map'):
                     if not self._temp_game_map.is_walkable(x, current_y):
                         return False
                         
         elif y == bomb.grid_y:
-            # Mesma linha - verificar coluna
             distance = abs(x - bomb.grid_x)
             if distance > bomb.explosion_range:
                 return False
                 
-            # Verificar se há obstáculos no caminho da explosão
             current_x = bomb.grid_x
             step = 1 if x > bomb.grid_x else -1
             
             while current_x != x:
                 current_x += step
-                # Se encontrou um obstáculo antes de chegar na posição, está seguro
                 if hasattr(self, '_temp_game_map'):
                     if not self._temp_game_map.is_walkable(current_x, y):
                         return False
@@ -238,202 +229,157 @@ class Enemy:
         return True
 
     def should_place_bomb(self, game_map, player, bombs):
-        """🎯 IA MAIS CAUTELOSA que coloca bombas com mais critério"""
-        # Verificar se já tem muitas bombas ativas (próprias ou de outros)
         my_bombs = sum(1 for bomb in bombs if bomb.owner == self.character)
         total_bombs = len(bombs)
         
-        if my_bombs >= self.max_bombs or total_bombs >= 5:  # Limitar total de bombas no mapa
+        if my_bombs >= self.max_bombs or total_bombs >= 5:
             return False
         
         grid_x, grid_y = self.get_grid_pos()
         
-        # 🔒 VERIFICAÇÕES DE SEGURANÇA MAIS RIGOROSAS
-        # 1. Precisa ter pelo menos 2 rotas de fuga SEGURAS (considerando a própria bomba)
         escape_routes = self.count_escape_routes(game_map, bombs, grid_x, grid_y)
-        if escape_routes < 2:  # Exigir pelo menos 2 rotas de fuga
+        if escape_routes < 2:
             return False
         
-        # 2. Verificação adicional: garantir que consegue sair da própria explosão
         if not self.can_escape_own_bomb(game_map, bombs, grid_x, grid_y):
             return False
         
-        # 3. Verificar se há outras bombas muito próximas
         for bomb in bombs:
-            if bomb.owner != self.character:  # Bomba de outro bot
+            if bomb.owner != self.character:
                 if abs(bomb.grid_x - grid_x) + abs(bomb.grid_y - grid_y) <= 4:
-                    return False  # Não colocar bomba perto de outras bombas
+                    return False
         
-        # Calcular distância do jogador
         distance_to_player = math.sqrt(
             (player.x - self.x)**2 + (player.y - self.y)**2
         )
         tile_distance = distance_to_player / TILE_SIZE
         
-        # 🎯 ESTRATÉGIA 1: ATAQUE AO JOGADOR (MAIS CAUTELOSO)
-        if 3 <= tile_distance <= 5:  # Distância segura
+        if 3 <= tile_distance <= 5:
             player_grid_x, player_grid_y = player.get_grid_pos()
             
-            # Verificar se jogador está na linha de explosão da bomba
             if self.will_bomb_hit_player(grid_x, grid_y, player_grid_x, player_grid_y):
-                return random.random() < self.aggression_level  # Chance baseada na agressividade
+                return random.random() < self.aggression_level
         
-        # � ESTRATÉGIA 2: QUEBRAR TIJOLOS (PRIORIDADE AUMENTADA)
         strategic_bricks = self.count_strategic_bricks(game_map, grid_x, grid_y)
         if strategic_bricks >= 2:
-            return random.random() < 0.4  # 40% de chance
+            return random.random() < 0.4
         
-        # 🎲 ESTRATÉGIA 3: COMPORTAMENTO MAIS PREVISÍVEL
-        return random.random() < 0.1  # Apenas 10% de chance de comportamento aleatório
+        return random.random() < 0.1
     
     def should_place_bomb_aggressive(self, game_map, player, bombs):
-        """🎯 SISTEMA AGRESSIVO - Coloca bombas para atacar o jogador"""
-        # Verificar se já tem muitas bombas próprias
         my_bombs = sum(1 for bomb in bombs if bomb.owner == self.character)
         if my_bombs >= self.max_bombs:
             return False
         
-        # Não colocar se em modo pânico extremo
         if self.panic_mode:
             return False
         
         grid_x, grid_y = self.get_grid_pos()
         player_grid_x, player_grid_y = player.get_grid_pos()
         
-        # 🎯 ESTRATÉGIA 1: ATAQUE DIRETO AO JOGADOR
         distance_to_player = abs(grid_x - player_grid_x) + abs(grid_y - player_grid_y)
         
-        # Se jogador está na linha de explosão E a uma distância razoável
         if 2 <= distance_to_player <= 4:
             if self.will_bomb_hit_player(grid_x, grid_y, player_grid_x, player_grid_y):
-                # Verificar se tem pelo menos 1 rota de fuga
                 if self.count_escape_routes(game_map, bombs, grid_x, grid_y) >= 1:
-                    return random.random() < self.aggression_level * 1.5  # Chance alta de atacar
+                    return random.random() < self.aggression_level * 1.5
         
-        # 🧱 ESTRATÉGIA 2: QUEBRAR BLOCOS PRÓXIMOS AO JOGADOR
         strategic_bricks = self.count_strategic_bricks(game_map, grid_x, grid_y)
-        if strategic_bricks >= 1:  # Reduzido de 2 para 1
-            # Se há blocos para quebrar E jogador está próximo
+        if strategic_bricks >= 1:
             if distance_to_player <= 5:
                 if self.count_escape_routes(game_map, bombs, grid_x, grid_y) >= 1:
                     return random.random() < self.aggression_level
         
-        # 🎲 ESTRATÉGIA 3: COMPORTAMENTO ALEATÓRIO AGRESSIVO
-        if distance_to_player <= 3:  # Só se jogador estiver bem próximo
+        if distance_to_player <= 3:
             if self.count_escape_routes(game_map, bombs, grid_x, grid_y) >= 2:
-                return random.random() < (self.aggression_level * 0.5)  # Chance moderada
+                return random.random() < (self.aggression_level * 0.5)
         
         return False
 
     def can_safely_escape_from_bomb(self, game_map, bombs, bomb_grid_x, bomb_grid_y):
-        """🔍 VERIFICAÇÃO PRÉ-BOMBA: Simula se consegue escapar antes de colocar bomba - VERSÃO MAIS PERMISSIVA"""
         grid_x, grid_y = self.get_grid_pos()
         
-        # Verificar se tem pelo menos 1 direção walkable imediata (requisito mínimo)
         immediate_exits = 0
         for direction in range(4):
             dx, dy = Direction.DELTAS[direction]
             check_x = grid_x + dx
             check_y = grid_y + dy
             
-            # Verificar se a primeira posição é válida e walkable
             if (0 <= check_x < COLS and 0 <= check_y < ROWS and 
                 game_map.is_walkable(check_x, check_y)):
                 immediate_exits += 1
         
-        # Se não tem nem uma saída imediata, é muito perigoso
         if immediate_exits == 0:
             return False
         
-        # Criar bomba simulada para testar escape mais detalhado
         simulated_bomb = type('obj', (object,), {
             'grid_x': bomb_grid_x,
             'grid_y': bomb_grid_y,
             'owner': self.character,
-            'explosion_range': 2  # Range padrão
+            'explosion_range': 2
         })
         
-        # Lista de bombas incluindo a simulada
         test_bombs = list(bombs) + [simulated_bomb]
         
-        # Testar se consegue escapar em pelo menos 1 direção
         for direction in range(4):
             dx, dy = Direction.DELTAS[direction]
             
-            # Testar fuga nesta direção por até 3 tiles (mais permissivo)
             for distance in range(1, 4):
                 check_x = grid_x + dx * distance
                 check_y = grid_y + dy * distance
                 
-                # Verificar limites
                 if not (0 <= check_x < COLS and 0 <= check_y < ROWS):
                     break
                 
-                # Verificar se é walkable
                 if not game_map.is_walkable(check_x, check_y):
                     break
                 
-                # Verificar se esta posição é segura da bomba simulada
                 safe_from_simulated_bomb = not self.is_in_bomb_explosion_path(check_x, check_y, simulated_bomb)
                 
                 if safe_from_simulated_bomb:
-                    # Se consegue chegar a uma posição segura, é suficiente
                     return True
         
-        # Se chegou aqui, não conseguiu encontrar escape - mas ainda permitir se tiver saídas imediatas
-        return immediate_exits >= 2  # Pelo menos 2 saídas imediatas
+        return immediate_exits >= 2
 
     def should_place_bomb_smart(self, game_map, player, bombs):
-        """🧠 SISTEMA INTELIGENTE MELHORADO - IA estratégica para colocação de bombas"""
-        # Verificar se já tem muitas bombas próprias
         my_bombs = sum(1 for bomb in bombs if bomb.owner == self.character)
         if my_bombs >= self.max_bombs:
             return False
         
-        # NUNCA colocar se em pânico (muito próximo de explosão)
         if self.panic_mode:
             return False
         
         grid_x, grid_y = self.get_grid_pos()
         player_grid_x, player_grid_y = player.get_grid_pos()
         
-        # 🎯 ESTRATÉGIA 1: ATACAR O JOGADOR (Prioridade máxima)
         distance_to_player = abs(grid_x - player_grid_x) + abs(grid_y - player_grid_y)
         
-        # Se o jogador está na linha de fogo e a uma distância boa para atacar
         if 2 <= distance_to_player <= 5:
             if self.will_bomb_hit_player(grid_x, grid_y, player_grid_x, player_grid_y):
-                # Verificar se tem pelo menos 2 rotas de fuga seguras
                 escape_routes = self.calculate_escape_routes(game_map, bombs, grid_x, grid_y)
                 if len(escape_routes) >= 2:
                     print(f"🎯 {self.character} vai atacar o jogador! Distância: {distance_to_player}")
-                    return random.random() < 0.7  # 70% chance de atacar
+                    return random.random() < 0.7
         
-        # 🎯 ESTRATÉGIA 2: QUEBRAR BLOCOS DESTRUTÍVEIS (Segunda prioridade)
         destructible_info = self.find_best_destructible_target(game_map)
         if destructible_info:
-            # Verificar se a posição é segura para colocar bomba
             escape_routes = self.calculate_escape_routes(game_map, bombs, grid_x, grid_y)
             if len(escape_routes) >= 1:
                 print(f"💎 {self.character} vai quebrar bloco destrutível!")
-                return random.random() < 0.5  # 50% chance de quebrar blocos
+                return random.random() < 0.5
         
-        # 🎯 ESTRATÉGIA 3: POSICIONAMENTO TÁTICO (Terceira prioridade)
-        # Colocar bomba para controlar território ou bloquear passagens do jogador
-        if distance_to_player >= 4:  # Não muito próximo do jogador
+        if distance_to_player >= 4:
             if self.is_tactical_position(game_map, player, grid_x, grid_y):
                 escape_routes = self.calculate_escape_routes(game_map, bombs, grid_x, grid_y)
                 if len(escape_routes) >= 2:
                     print(f"🛡️ {self.character} posicionamento tático!")
-                    return random.random() < 0.3  # 30% chance tática
+                    return random.random() < 0.3
         
         return False
     
     def calculate_escape_routes(self, game_map, bombs, bomb_x, bomb_y):
-        """Calcula todas as rotas de fuga possíveis de uma posição"""
         escape_routes = []
         
-        # Simular bomba na posição atual
         future_bombs = list(bombs)
         simulated_bomb = type('obj', (object,), {
             'grid_x': bomb_x,
@@ -443,24 +389,19 @@ class Enemy:
         })()
         future_bombs.append(simulated_bomb)
         
-        # Testar cada direção
         for direction in range(4):
             dx, dy = Direction.DELTAS[direction]
             
-            # Verificar se consegue escapar nesta direção
-            for distance in range(1, 4):  # Testar até 3 tiles de distância
+            for distance in range(1, 4):
                 escape_x = bomb_x + dx * distance
                 escape_y = bomb_y + dy * distance
                 
-                # Verificar limites
                 if not (0 <= escape_x < COLS and 0 <= escape_y < ROWS):
                     break
                 
-                # Verificar se o caminho está livre
                 if not game_map.is_walkable(escape_x, escape_y):
                     break
                 
-                # Verificar se esta posição está segura de todas as bombas
                 is_safe = True
                 for bomb in future_bombs:
                     if self.is_position_in_bomb_range(escape_x, escape_y, bomb):
@@ -473,36 +414,30 @@ class Enemy:
                         'distance': distance,
                         'position': (escape_x, escape_y)
                     })
-                    break  # Encontrou rota segura nesta direção
+                    break
         
         return escape_routes
     
     def find_best_destructible_target(self, game_map):
-        """Encontra o melhor bloco destrutível para atacar"""
         grid_x, grid_y = self.get_grid_pos()
         best_target = None
         max_value = 0
         
-        # Verificar blocos destrutíveis no alcance da bomba
         for direction in range(4):
             dx, dy = Direction.DELTAS[direction]
             for distance in range(1, self.bomb_range + 1):
                 target_x = grid_x + dx * distance
                 target_y = grid_y + dy * distance
                 
-                # Verificar limites
                 if not (0 <= target_x < COLS and 0 <= target_y < ROWS):
                     break
                 
                 tile_type = game_map.get_tile(target_x, target_y)
                 
-                # Se encontrou parede, parar nesta direção
                 if tile_type == TileType.WALL:
                     break
                 
-                # Se encontrou bloco destrutível, avaliar valor
                 if tile_type == TileType.BRICK:
-                    # Calcular valor baseado na posição estratégica
                     value = self.calculate_destructible_value(game_map, target_x, target_y)
                     if value > max_value:
                         max_value = value
@@ -511,20 +446,17 @@ class Enemy:
                             'value': value,
                             'direction': direction
                         }
-                    break  # Parar nesta direção após encontrar bloco
+                    break
         
         return best_target
     
     def calculate_destructible_value(self, game_map, block_x, block_y):
-        """Calcula o valor estratégico de destruir um bloco"""
-        value = 1  # Valor base
+        value = 1
         
-        # Maior valor se estiver perto das bordas (abre mais espaço)
         distance_to_edge = min(block_x, block_y, COLS - 1 - block_x, ROWS - 1 - block_y)
         if distance_to_edge <= 2:
             value += 2
         
-        # Maior valor se houver mais blocos destrutíveis próximos
         adjacent_blocks = 0
         for dx in [-1, 0, 1]:
             for dy in [-1, 0, 1]:
@@ -540,14 +472,11 @@ class Enemy:
         return value
     
     def is_tactical_position(self, game_map, player, grid_x, grid_y):
-        """Verifica se a posição atual é boa para colocação tática de bomba"""
         player_grid_x, player_grid_y = player.get_grid_pos()
         
-        # Verificar se está numa passagem que o jogador pode usar
         if self.is_in_player_path(game_map, player, grid_x, grid_y):
             return True
         
-        # Verificar se está numa posição central (controle de território)
         center_x, center_y = COLS // 2, ROWS // 2
         distance_to_center = abs(grid_x - center_x) + abs(grid_y - center_y)
         if distance_to_center <= 3:
@@ -556,14 +485,11 @@ class Enemy:
         return False
     
     def is_in_player_path(self, game_map, player, grid_x, grid_y):
-        """Verifica se está numa possível rota do jogador"""
         player_grid_x, player_grid_y = player.get_grid_pos()
         
-        # Verificar se está na mesma linha ou coluna do jogador
         if grid_x == player_grid_x or grid_y == player_grid_y:
             return True
         
-        # Verificar se está numa passagem estreita
         walkable_neighbors = 0
         for dx in [-1, 0, 1]:
             for dy in [-1, 0, 1]:
@@ -574,12 +500,9 @@ class Enemy:
                     game_map.is_walkable(check_x, check_y)):
                     walkable_neighbors += 1
         
-        # Se tem poucos vizinhos caminháveis, é uma passagem estratégica
         return walkable_neighbors <= 3
     
     def should_place_bomb_simple(self, game_map, player, bombs):
-        """🎯 SISTEMA SIMPLIFICADO - Decisões rápidas de bomba"""
-        # Verificar se já tem bomba ativa
         my_bombs = sum(1 for bomb in bombs if bomb.owner == self.character)
         if my_bombs >= self.max_bombs:
             return False
@@ -587,11 +510,9 @@ class Enemy:
         grid_x, grid_y = self.get_grid_pos()
         player_grid_x, player_grid_y = player.get_grid_pos()
         
-        # Não colocar se muito próximo das bordas
         if grid_x <= 1 or grid_y <= 1 or grid_x >= COLS-2 or grid_y >= ROWS-2:
             return False
         
-        # Verificar se tem pelo menos 2 direções para escapar
         escape_directions = 0
         for direction in range(4):
             dx, dy = Direction.DELTAS[direction]
@@ -599,7 +520,6 @@ class Enemy:
             
             if (0 <= test_x < COLS and 0 <= test_y < ROWS and 
                 game_map.is_walkable(test_x, test_y)):
-                # Verificar se esta direção está segura de outras bombas
                 safe_from_bombs = True
                 for bomb in bombs:
                     if self.is_position_in_bomb_range(test_x, test_y, bomb):
@@ -609,17 +529,14 @@ class Enemy:
                     escape_directions += 1
         
         if escape_directions < 2:
-            return False  # Precisa de pelo menos 2 rotas de fuga
+            return False
         
-        # Calcular distância do jogador
         distance_to_player = abs(grid_x - player_grid_x) + abs(grid_y - player_grid_y)
         
-        # Estratégia 1: Atacar jogador se estiver na linha de fogo
         if 2 <= distance_to_player <= 4:
             if (grid_x == player_grid_x or grid_y == player_grid_y):
-                return random.random() < 0.6  # 60% chance de atacar
+                return random.random() < 0.6
         
-        # Estratégia 2: Quebrar blocos destrutíveis próximos
         destructible_nearby = False
         for direction in range(4):
             dx, dy = Direction.DELTAS[direction]
@@ -638,25 +555,21 @@ class Enemy:
                     break
         
         if destructible_nearby:
-            return random.random() < 0.4  # 40% chance de quebrar blocos
+            return random.random() < 0.4
         
-        # Estratégia 3: Colocação aleatória ocasional
-        if distance_to_player >= 5:  # Longe do jogador
-            return random.random() < 0.1  # 10% chance aleatória
+        if distance_to_player >= 5:
+            return random.random() < 0.1
         
         return False
 
     def can_safely_escape_own_bomb(self, game_map, bombs, grid_x, grid_y):
-        """Verifica se pode escapar com segurança de sua própria bomba"""
-        # Simular explosão da bomba na posição atual
         explosion_range = self.bomb_range
         
         for direction in range(4):
             dx, dy = Direction.DELTAS[direction]
             
-            # Verificar se pode correr pelo menos 3-4 tiles nesta direção
             safe_distance = 0
-            for i in range(1, explosion_range + 3):  # Além do alcance da bomba
+            for i in range(1, explosion_range + 3):
                 check_x = grid_x + dx * i
                 check_y = grid_y + dy * i
                 
@@ -667,21 +580,19 @@ class Enemy:
                 
                 safe_distance += 1
             
-            # Se consegue correr pelo menos 3 tiles, é seguro
             if safe_distance >= 3:
                 return True
         
         return False
 
     def has_long_escape_route(self, game_map, bombs, grid_x, grid_y):
-        """Verifica se tem rota de fuga longa (não apenas 1 tile)"""
         long_routes = 0
         
         for direction in range(4):
             dx, dy = Direction.DELTAS[direction]
             route_length = 0
             
-            for i in range(1, 6):  # Verificar até 5 tiles
+            for i in range(1, 6):
                 check_x = grid_x + dx * i
                 check_y = grid_y + dy * i
                 
@@ -690,7 +601,6 @@ class Enemy:
                 if not game_map.is_walkable(check_x, check_y):
                     break
                 
-                # Verificar se não há bombas próximas nesta rota
                 safe_from_bombs = True
                 for bomb in bombs:
                     if abs(bomb.grid_x - check_x) + abs(bomb.grid_y - check_y) <= bomb.explosion_range + 1:
@@ -702,35 +612,28 @@ class Enemy:
                 
                 route_length += 1
             
-            # Rota longa = pelo menos 3 tiles livres
             if route_length >= 3:
                 long_routes += 1
         
-        return long_routes >= 1  # Pelo menos 1 rota longa
+        return long_routes >= 1
 
     def should_place_bomb_ultra_safe(self, game_map, player, bombs):
-        """🛡️ SISTEMA ULTRA DEFENSIVO - Quase nunca coloca bombas"""
-        # ❌ NUNCA colocar se há QUALQUER bomba no mapa
         if len(bombs) > 0:
             return False
         
-        # ❌ NUNCA colocar se em modo pânico
         if self.panic_mode:
             return False
         
-        # ❌ NUNCA colocar se já tem bomba própria
         my_bombs = sum(1 for bomb in bombs if bomb.owner == self.character)
         if my_bombs >= self.max_bombs:
             return False
         
         grid_x, grid_y = self.get_grid_pos()
         
-        # ❌ NUNCA colocar se não tiver pelo menos 8 rotas de fuga totalmente seguras
         safe_routes = 0
         for direction in range(4):
             dx, dy = Direction.DELTAS[direction]
             
-            # Verificar até 8 tiles na direção para garantir fuga
             route_completely_safe = True
             for distance in range(1, 9):
                 check_x = grid_x + dx * distance
@@ -742,20 +645,17 @@ class Enemy:
                     route_completely_safe = False
                     break
                     
-                # Verificar se player está muito perto desta rota
                 distance_to_player = abs(check_x - player.get_grid_pos()[0]) + abs(check_y - player.get_grid_pos()[1])
-                if distance_to_player <= 2:  # Player muito perto
+                if distance_to_player <= 2:
                     route_completely_safe = False
                     break
             
-            if route_completely_safe and distance >= 6:  # Rota longa e segura
+            if route_completely_safe and distance >= 6:
                 safe_routes += 1
         
-        # ❌ Precisa de pelo menos 3 rotas ultra seguras
         if safe_routes < 3:
             return False
         
-        # ❌ NUNCA atacar se player estiver perto (menos de 8 tiles)
         distance_to_player = math.sqrt(
             (player.x - self.x)**2 + (player.y - self.y)**2
         )
@@ -764,14 +664,11 @@ class Enemy:
         if tile_distance < 8:
             return False
         
-        # ❌ Apenas 1% de chance FINAL mesmo com todas as condições perfeitas
         return random.random() < 0.01
     
     def count_escape_routes(self, game_map, bombs, grid_x, grid_y):
-        """Conta quantas rotas de fuga SEGURAS existem considerando a bomba que será colocada"""
         escape_routes = 0
         
-        # Simular a bomba que será colocada nesta posição
         future_bombs = bombs + [type('', (), {
             'grid_x': grid_x, 
             'grid_y': grid_y, 
@@ -782,24 +679,19 @@ class Enemy:
         for direction in range(4):
             dx, dy = Direction.DELTAS[direction]
             
-            # Verificar se consegue escapar a pelo menos 3 tiles de distância
             escape_possible = False
-            for escape_distance in range(1, 4):  # Tentar escapar 1, 2 ou 3 tiles
+            for escape_distance in range(1, 4):
                 escape_x = grid_x + dx * escape_distance
                 escape_y = grid_y + dy * escape_distance
                 
-                # Verificar limites
                 if not (0 <= escape_x < COLS and 0 <= escape_y < ROWS):
                     break
                 
-                # Verificar se o caminho está livre
                 if not game_map.is_walkable(escape_x, escape_y):
                     break
                 
-                # Verificar se esta posição de escape está segura de TODAS as bombas
                 position_safe = True
                 for bomb in future_bombs:
-                    # Verificar se está na linha de explosão da bomba
                     if ((bomb.grid_x == escape_x and abs(bomb.grid_y - escape_y) <= bomb.explosion_range) or
                         (bomb.grid_y == escape_y and abs(bomb.grid_x - escape_x) <= bomb.explosion_range)):
                         position_safe = False
@@ -807,7 +699,7 @@ class Enemy:
                 
                 if position_safe:
                     escape_possible = True
-                    break  # Encontrou uma posição segura nesta direção
+                    break
             
             if escape_possible:
                 escape_routes += 1
@@ -815,25 +707,18 @@ class Enemy:
         return escape_routes
 
     def can_escape_own_bomb(self, game_map, bombs, grid_x, grid_y):
-        """Verifica se consegue escapar da própria bomba considerando tempo de fuga"""
-        # Simular movimento: em 3 segundos (BOMB_TIMER), consegue se mover ~6 tiles
-        # Ser mais conservador: assumir que consegue mover apenas 4 tiles
         max_escape_tiles = 4
         
-        # Testar fuga em todas as direções
         for direction in range(4):
             dx, dy = Direction.DELTAS[direction]
             
-            # Verificar se consegue chegar a uma posição segura
             for distance in range(1, max_escape_tiles + 1):
                 escape_x = grid_x + dx * distance
                 escape_y = grid_y + dy * distance
                 
-                # Verificar limites
                 if not (0 <= escape_x < COLS and 0 <= escape_y < ROWS):
                     break
                 
-                # Verificar se o caminho está livre (sem obstáculos para chegar lá)
                 path_clear = True
                 for step in range(1, distance + 1):
                     check_x = grid_x + dx * step
@@ -845,10 +730,8 @@ class Enemy:
                 if not path_clear:
                     break
                 
-                # Verificar se esta posição final estará segura da própria bomba
                 if not ((grid_x == escape_x and abs(grid_y - escape_y) <= self.bomb_range) or
                         (grid_y == escape_y and abs(grid_x - escape_x) <= self.bomb_range)):
-                    # Posição segura encontrada! Verificar se também está segura de outras bombas
                     safe_from_others = True
                     for bomb in bombs:
                         if ((bomb.grid_x == escape_x and abs(bomb.grid_y - escape_y) <= bomb.explosion_range) or
@@ -857,35 +740,26 @@ class Enemy:
                             break
                     
                     if safe_from_others:
-                        return True  # Encontrou uma rota de fuga segura!
-        
-        return False  # Não encontrou rota de fuga segura
+                        return True
         
         return False
     
     def has_any_escape_route(self, game_map, bombs, grid_x, grid_y):
-        """🔒 VERIFICAÇÃO ULTRA INTELIGENTE de rota de fuga - simula movimento futuro"""
-        # Simular onde o bot estará quando a bomba explodir (3 segundos)
-        # Bot pode se mover até 3 tiles em 3 segundos
         max_escape_distance = 3
         
         for direction in range(4):
             dx, dy = Direction.DELTAS[direction]
             
-            # Verificar múltiplas posições de fuga (1, 2 e 3 tiles de distância)
             for distance in range(1, max_escape_distance + 1):
                 escape_x = grid_x + dx * distance
                 escape_y = grid_y + dy * distance
                 
-                # Verificar limites
                 if not (0 <= escape_x < COLS and 0 <= escape_y < ROWS):
                     break
                 
-                # Verificar se é walkable
                 if not game_map.is_walkable(escape_x, escape_y):
                     break
                 
-                # Verificar se há bombas próximas que podem matar o inimigo nesta posição
                 bomb_danger = False
                 for bomb in bombs:
                     bomb_distance = abs(escape_x - bomb.grid_x) + abs(escape_y - bomb.grid_y)
@@ -893,9 +767,7 @@ class Enemy:
                         bomb_danger = True
                         break
                 
-                # Se encontrou uma posição segura, verificar se consegue chegar lá
                 if not bomb_danger:
-                    # Verificar se o caminho até lá é livre
                     path_clear = True
                     for step in range(1, distance):
                         path_x = grid_x + dx * step
@@ -905,44 +777,33 @@ class Enemy:
                             break
                     
                     if path_clear:
-                        return True  # Encontrou rota de fuga segura!
+                        return True
         
-        return False  # Nenhuma rota de fuga segura encontrada
+        return False
     
     def is_direction_walkable(self, game_map, grid_x, grid_y, dx, dy):
-        """Verifica se uma direção é walkable (simples)"""
         check_x = grid_x + dx
         check_y = grid_y + dy
         
-        # Verificar limites
         if not (0 <= check_x < COLS and 0 <= check_y < ROWS):
             return False
         
-        # Verificar se é walkable
         return game_map.is_walkable(check_x, check_y)
     
     def will_bomb_hit_player(self, bomb_x, bomb_y, player_x, player_y):
-        """Verifica se uma bomba vai atingir o jogador"""
-        # Mesmo eixo horizontal ou vertical
         if bomb_x == player_x or bomb_y == player_y:
-            # Calcular distância Manhattan
             distance = abs(bomb_x - player_x) + abs(bomb_y - player_y)
             return distance <= self.bomb_range
         return False
     
     def can_block_player_escape(self, game_map, player, grid_x, grid_y):
-        """Verifica se pode bloquear uma rota de fuga do jogador"""
         player_grid_x, player_grid_y = player.get_grid_pos()
         
-        # Verificar se está entre o jogador e uma saída
-        # (implementação simplificada)
         return abs(grid_x - player_grid_x) <= 2 and abs(grid_y - player_grid_y) <= 2
     
     def count_strategic_bricks(self, game_map, grid_x, grid_y):
-        """Conta tijolos estratégicos ao redor"""
         strategic_count = 0
         
-        # Verificar tijolos em linha reta (formato da explosão)
         for direction in range(4):
             dx, dy = Direction.DELTAS[direction]
             for i in range(1, self.bomb_range + 1):
@@ -956,10 +817,8 @@ class Enemy:
         return strategic_count
     
     def get_safe_direction(self, game_map, bombs):
-        """🏃 SISTEMA INTELIGENTE DE FUGA - Encontra a melhor direção para escapar"""
         grid_x, grid_y = self.get_grid_pos()
         
-        # Avaliar cada direção com pontuação de segurança
         direction_scores = {}
         
         for direction in range(4):
@@ -967,29 +826,24 @@ class Enemy:
             next_x = grid_x + dx
             next_y = grid_y + dy
             
-            # Verificar se é válido
             if not (0 <= next_x < COLS and 0 <= next_y < ROWS):
-                direction_scores[direction] = -1000  # Direção inválida
+                direction_scores[direction] = -1000
                 continue
             if not game_map.is_walkable(next_x, next_y):
-                direction_scores[direction] = -1000  # Direção bloqueada
+                direction_scores[direction] = -1000
                 continue
             
-            # Calcular pontuação de segurança
             safety_score = self.calculate_direction_safety(game_map, bombs, next_x, next_y, direction)
             direction_scores[direction] = safety_score
         
-        # Filtrar direções válidas
         valid_directions = [(dir, score) for dir, score in direction_scores.items() if score > -1000]
         
         if not valid_directions:
             print(f"⚠️ {self.character} nenhuma direção válida encontrada")
             return None
         
-        # Ordenar por segurança (maior pontuação = mais seguro)
         valid_directions.sort(key=lambda x: x[1], reverse=True)
         
-        # Escolher entre as melhores direções (top 2) para adicionar variabilidade
         best_directions = [dir for dir, score in valid_directions[:2] if score > 0]
         
         if best_directions:
@@ -998,42 +852,36 @@ class Enemy:
             print(f"🎯 {self.character} direção segura escolhida: {['↑','→','↓','←'][chosen]} (segurança: {safety_level:.1f})")
             return chosen
         
-        # Se não há direções completamente seguras, escolher a menos perigosa
         least_dangerous = valid_directions[0][0]
         print(f"⚠️ {self.character} escolheu direção menos perigosa: {['↑','→','↓','←'][least_dangerous]}")
         return least_dangerous
     
     def calculate_direction_safety(self, game_map, bombs, check_x, check_y, direction):
-        """Calcula a pontuação de segurança de uma direção específica"""
-        safety_score = 100  # Pontuação base
+        safety_score = 100
         
-        # 1. Verificar perigo imediato de bombas
         for bomb in bombs:
             if self.is_position_in_bomb_range(check_x, check_y, bomb):
-                # Penalizar baseado no tempo restante da bomba
                 time_left = BOMB_TIMER - (pygame.time.get_ticks() - bomb.timer)
-                if time_left < 1000:  # Menos de 1 segundo
-                    safety_score -= 1000  # Muito perigoso
-                elif time_left < 2000:  # Menos de 2 segundos
-                    safety_score -= 500   # Perigoso
+                if time_left < 1000:
+                    safety_score -= 1000
+                elif time_left < 2000:
+                    safety_score -= 500
                 else:
-                    safety_score -= 200   # Moderadamente perigoso
+                    safety_score -= 200
         
-        # 2. Verificar se a direção leva para mais longe das bombas
         current_grid_x, current_grid_y = self.get_grid_pos()
         for bomb in bombs:
             current_distance = abs(current_grid_x - bomb.grid_x) + abs(current_grid_y - bomb.grid_y)
             new_distance = abs(check_x - bomb.grid_x) + abs(check_y - bomb.grid_y)
             
             if new_distance > current_distance:
-                safety_score += 50  # Bônus por se afastar da bomba
+                safety_score += 50
             elif new_distance < current_distance:
-                safety_score -= 30  # Penalidade por se aproximar da bomba
+                safety_score -= 30
         
-        # 3. Verificar profundidade do caminho (quantos tiles pode avançar nesta direção)
         dx, dy = Direction.DELTAS[direction]
         path_depth = 0
-        for i in range(1, 5):  # Verificar até 4 tiles à frente
+        for i in range(1, 5):
             test_x = check_x + dx * i
             test_y = check_y + dy * i
             
@@ -1042,7 +890,6 @@ class Enemy:
             if not game_map.is_walkable(test_x, test_y):
                 break
             
-            # Verificar se há bombas neste caminho
             safe_in_path = True
             for bomb in bombs:
                 if self.is_position_in_bomb_range(test_x, test_y, bomb):
@@ -1054,14 +901,11 @@ class Enemy:
             else:
                 break
         
-        # Bônus por ter caminho longo e seguro
         safety_score += path_depth * 20
         
-        # 4. Evitar ficar preso em cantos
         if self.is_corner_position(game_map, check_x, check_y):
             safety_score -= 100
         
-        # 5. Preferir não voltar na direção oposta (evitar oscilação)
         if hasattr(self, 'direction'):
             opposite_direction = (self.direction + 2) % 4
             if direction == opposite_direction:
@@ -1070,7 +914,6 @@ class Enemy:
         return safety_score
     
     def is_corner_position(self, game_map, grid_x, grid_y):
-        """Verifica se uma posição é um canto (poucas saídas)"""
         walkable_neighbors = 0
         for dx in [-1, 0, 1]:
             for dy in [-1, 0, 1]:
@@ -1081,19 +924,16 @@ class Enemy:
                     game_map.is_walkable(check_x, check_y)):
                     walkable_neighbors += 1
         
-        return walkable_neighbors <= 2  # 2 ou menos vizinhos = canto
+        return walkable_neighbors <= 2
     
     def is_position_in_bomb_range(self, check_x, check_y, bomb):
-        """Versão simples: verifica se posição está no alcance de uma bomba"""
         bomb_x, bomb_y = bomb.grid_x, bomb.grid_y
         
-        # Verificar se está na mesma linha (horizontal)
         if check_y == bomb_y:
             distance = abs(check_x - bomb_x)
             if distance <= bomb.explosion_range:
                 return True
         
-        # Verificar se está na mesma coluna (vertical)  
         if check_x == bomb_x:
             distance = abs(check_y - bomb_y)
             if distance <= bomb.explosion_range:
@@ -1102,7 +942,6 @@ class Enemy:
         return False
     
     def get_least_dangerous_direction(self, game_map, bombs, grid_x, grid_y):
-        """Retorna a direção com menos bombas próximas"""
         direction_danger = {}
         
         for direction in range(4):
@@ -1116,59 +955,47 @@ class Enemy:
             
             direction_danger[direction] = danger_level
         
-        # Retornar direção com menor perigo
         return min(direction_danger, key=direction_danger.get)
     
     def get_attack_direction(self, game_map, player):
-        """Retorna a direção para se aproximar do jogador estrategicamente com pathfinding"""
         grid_x, grid_y = self.get_grid_pos()
         player_grid_x, player_grid_y = player.get_grid_pos()
         
-        # Calcular direção para o jogador
         dx = player_grid_x - grid_x
         dy = player_grid_y - grid_y
         
-        # Lista de direções priorizadas baseadas na distância ao jogador
         preferred_directions = []
         
-        # Priorizar movimento no eixo com maior diferença
         if abs(dx) > abs(dy):
-            # Mover horizontalmente primeiro
             if dx > 0:
                 preferred_directions.append(Direction.RIGHT)
             else:
                 preferred_directions.append(Direction.LEFT)
-            # Depois verticalmente
             if dy > 0:
                 preferred_directions.append(Direction.DOWN)
             else:
                 preferred_directions.append(Direction.UP)
         else:
-            # Mover verticalmente primeiro
             if dy > 0:
                 preferred_directions.append(Direction.DOWN)
             else:
                 preferred_directions.append(Direction.UP)
-            # Depois horizontalmente
             if dx > 0:
                 preferred_directions.append(Direction.RIGHT)
             else:
                 preferred_directions.append(Direction.LEFT)
         
-        # Testar direções na ordem de preferência
         for direction in preferred_directions:
             dx_test, dy_test = Direction.DELTAS[direction]
             if self.is_direction_walkable(game_map, grid_x, grid_y, dx_test, dy_test):
                 return direction
         
-        # Se nenhuma direção preferida funcionou, tentar qualquer direção disponível
         safe_directions = []
         for direction in range(4):
             dx_test, dy_test = Direction.DELTAS[direction]
             if self.is_direction_walkable(game_map, grid_x, grid_y, dx_test, dy_test):
                 safe_directions.append(direction)
         
-        # Preferir direções que não sejam opostas à direção atual (evitar ficar oscilando)
         if safe_directions:
             opposite_direction = (self.direction + 2) % 4
             non_opposite_directions = [d for d in safe_directions if d != opposite_direction]
@@ -1177,155 +1004,442 @@ class Enemy:
             else:
                 return random.choice(safe_directions)
         
-        return self.direction  # Manter direção atual se não há alternativas
+        return self.direction
     
     def get_exploration_direction(self, game_map):
-        """Retorna direção para explorar - versão simplificada"""
         grid_x, grid_y = self.get_grid_pos()
         
-        # Buscar direções válidas
-        valid_directions = []
+        direction_scores = {}
+        
         for direction in range(4):
             dx, dy = Direction.DELTAS[direction]
             check_x = grid_x + dx
             check_y = grid_y + dy
             
-            if (0 <= check_x < COLS and 0 <= check_y < ROWS and 
-                game_map.is_walkable(check_x, check_y)):
-                valid_directions.append(direction)
+            if not (0 <= check_x < COLS and 0 <= check_y < ROWS):
+                continue
+            if not game_map.is_walkable(check_x, check_y):
+                continue
+            
+            score = 10
+            
+            destructible_nearby = 0
+            for search_range in range(1, 4):
+                search_x = check_x + dx * search_range
+                search_y = check_y + dy * search_range
+                
+                if not (0 <= search_x < COLS and 0 <= search_y < ROWS):
+                    break
+                
+                tile_type = game_map.get_tile(search_x, search_y)
+                if tile_type == TileType.WALL:
+                    break
+                elif tile_type == TileType.BRICK:
+                    destructible_nearby += 1
+                    score += 50
+                    break
+            
+            if hasattr(self, 'direction') and direction == self.direction:
+                score += 5
+            
+            if hasattr(self, 'direction'):
+                opposite_direction = (self.direction + 2) % 4
+                if direction == opposite_direction:
+                    score -= 20
+            
+            direction_scores[direction] = score
         
-        if not valid_directions:
-            return random.randint(0, 3)  # Fallback
+        if not direction_scores:
+            return random.randint(0, 3)
         
-        # 50% chance de continuar na direção atual se possível
-        if (hasattr(self, 'direction') and 
-            self.direction in valid_directions and 
-            random.random() < 0.5):
-            return self.direction
+        best_directions = [dir for dir, score in direction_scores.items() 
+                          if score == max(direction_scores.values())]
         
-        # Evitar direção oposta (reduz oscilação)
-        if hasattr(self, 'direction'):
-            opposite_direction = (self.direction + 2) % 4
-            non_opposite = [d for d in valid_directions if d != opposite_direction]
-            if non_opposite:
-                return random.choice(non_opposite)
-        
-        return random.choice(valid_directions)
+        return random.choice(best_directions)
     
     def place_bomb(self, game_map, bombs, current_time):
-        """Coloca uma bomba"""
         grid_x, grid_y = self.get_grid_pos()
         
-        # Verificar se já existe bomba nesta posição
         for bomb in bombs:
             if bomb.grid_x == grid_x and bomb.grid_y == grid_y:
                 return False
         
-        # Criar nova bomba (NÃO definir como sólida no mapa ainda!)
-        new_bomb = Bomb(grid_x, grid_y, self.bomb_range, self.character)
-        bombs.append(new_bomb)
-        # game_map.set_tile(grid_x, grid_y, TileType.BOMB)  # REMOVIDO - deixar fantasma
+        if not (0 <= grid_x < COLS and 0 <= grid_y < ROWS):
+            return False
         
-        self.last_bomb_time = current_time
-        return True
+        try:
+            new_bomb = Bomb(grid_x, grid_y, self.bomb_range, self.character)
+            bombs.append(new_bomb)
+            self.last_bomb_time = current_time
+            return True
+        except Exception as e:
+            return False
     
-        
     def update_movement(self, game_map, bombs, player, current_time):
-        """🚀 SISTEMA DE MOVIMENTO ULTRA-SIMPLIFICADO"""
-        # 1. Verificar se há bomba muito próxima (perigo real)
         grid_x, grid_y = self.get_grid_pos()
-        in_danger = False
+        
+        immediate_danger = self.assess_immediate_danger_level(bombs, current_time)
+        
+        if immediate_danger > 0:
+            escape_direction = self.find_best_escape_direction(game_map, bombs, grid_x, grid_y, immediate_danger)
+            if escape_direction is not None:
+                if self.try_move_in_direction(game_map, escape_direction):
+                    return
+                else:
+                    for alt_direction in range(4):
+                        if alt_direction != escape_direction and self.is_direction_safer(game_map, bombs, alt_direction):
+                            if self.try_move_in_direction(game_map, alt_direction):
+                                return
+        
+        if hasattr(self, 'escape_mode_until') and current_time < self.escape_mode_until:
+            if hasattr(self, 'escape_direction') and self.escape_direction is not None:
+                if self.try_move_in_direction(game_map, self.escape_direction):
+                    return
+                else:
+                    alternative = self.find_alternative_escape_direction(game_map, bombs)
+                    if alternative is not None and self.try_move_in_direction(game_map, alternative):
+                        self.escape_direction = alternative
+                        return
+        
+        self.handle_normal_movement(game_map, bombs, current_time)
+    
+    def assess_immediate_danger_level(self, bombs, current_time):
+        grid_x, grid_y = self.get_grid_pos()
+        max_danger = 0
         
         for bomb in bombs:
             if self.is_position_in_bomb_range(grid_x, grid_y, bomb):
-                time_left = BOMB_TIMER - (pygame.time.get_ticks() - bomb.timer)
-                if time_left < 1000:  # Menos de 1 segundo
-                    in_danger = True
-                    break
-        
-        # 2. Se em perigo, mover para qualquer direção segura
-        if in_danger:
-            for direction in range(4):
-                dx, dy = Direction.DELTAS[direction]
-                new_x = self.x + dx * self.speed
-                new_y = self.y + dy * self.speed
+                time_left = BOMB_TIMER - (current_time - bomb.timer)
+                distance = abs(grid_x - bomb.grid_x) + abs(grid_y - bomb.grid_y)
                 
-                if game_map.can_move_to(new_x, new_y, self):
-                    # Verificar se esta nova posição é segura
-                    new_grid_x = int(new_x // TILE_SIZE)
-                    new_grid_y = int(new_y // TILE_SIZE)
+                danger_level = 0
+                if time_left < 800:
+                    danger_level = 3
+                elif time_left < 1500:
+                    danger_level = 2
+                elif time_left < 2500 and distance <= 1:
+                    danger_level = 2
+                elif time_left < 2500:
+                    danger_level = 1
+                
+                max_danger = max(max_danger, danger_level)
+        
+        return max_danger
+    
+    def find_best_escape_direction(self, game_map, bombs, grid_x, grid_y, danger_level):
+        direction_scores = {}
+        
+        for direction in range(4):
+            dx, dy = Direction.DELTAS[direction]
+            next_x, next_y = grid_x + dx, grid_y + dy
+            
+            if not (0 <= next_x < COLS and 0 <= next_y < ROWS):
+                continue
+            if not game_map.is_walkable(next_x, next_y):
+                continue
+            
+            score = 100
+            
+            for bomb in bombs:
+                bomb_distance = abs(next_x - bomb.grid_x) + abs(next_y - bomb.grid_y)
+                
+                if self.is_position_in_bomb_range(next_x, next_y, bomb):
+                    score -= 200
+                else:
+                    score += bomb_distance * 10
+                
+                if bomb.owner == self.character:
+                    current_dist = abs(grid_x - bomb.grid_x) + abs(grid_y - bomb.grid_y)
+                    new_dist = abs(next_x - bomb.grid_x) + abs(next_y - bomb.grid_y)
+                    if new_dist > current_dist:
+                        score += 50
+            
+            path_length = self.calculate_path_length(game_map, next_x, next_y, direction)
+            score += path_length * 5
+            
+            direction_scores[direction] = score
+        
+        if not direction_scores:
+            return None
+        
+        best_direction = max(direction_scores, key=direction_scores.get)
+        return best_direction if direction_scores[best_direction] > 0 else None
+    
+    def calculate_path_length(self, game_map, start_x, start_y, direction):
+        dx, dy = Direction.DELTAS[direction]
+        length = 0
+        
+        for i in range(1, 5):
+            check_x = start_x + dx * i
+            check_y = start_y + dy * i
+            
+            if not (0 <= check_x < COLS and 0 <= check_y < ROWS):
+                break
+            if not game_map.is_walkable(check_x, check_y):
+                break
                     
-                    safe = True
-                    for bomb in bombs:
-                        if self.is_position_in_bomb_range(new_grid_x, new_grid_y, bomb):
-                            safe = False
-                            break
-                    
-                    if safe:
-                        self.x = new_x
-                        self.y = new_y
-                        self.direction = direction
-                        self.is_moving = True
-                        return
+            length += 1
         
-        # 3. Movimento normal - muito simples
-        # Mudar direção ocasionalmente
-        if not hasattr(self, 'last_direction_change'):
-            self.last_direction_change = current_time
+        return length
+    
+    def is_direction_safer(self, game_map, bombs, direction):
+        grid_x, grid_y = self.get_grid_pos()
+        dx, dy = Direction.DELTAS[direction]
+        next_x, next_y = grid_x + dx, grid_y + dy
         
-        if current_time - self.last_direction_change > random.randint(1000, 3000):
-            # Escolher nova direção aleatória
-            self.direction = random.randint(0, 3)
-            self.last_direction_change = current_time
+        if not (0 <= next_x < COLS and 0 <= next_y < ROWS):
+            return False
+        if not game_map.is_walkable(next_x, next_y):
+            return False
         
-        # Tentar mover na direção atual
-        dx, dy = Direction.DELTAS[self.direction]
+        current_danger = 0
+        new_danger = 0
+        
+        for bomb in bombs:
+            if self.is_position_in_bomb_range(grid_x, grid_y, bomb):
+                current_danger += 1
+            if self.is_position_in_bomb_range(next_x, next_y, bomb):
+                new_danger += 1
+        
+        return new_danger < current_danger
+    
+    def try_move_in_direction(self, game_map, direction):
+        dx, dy = Direction.DELTAS[direction]
         new_x = self.x + dx * self.speed
         new_y = self.y + dy * self.speed
         
         if game_map.can_move_to(new_x, new_y, self):
             self.x = new_x
             self.y = new_y
+            self.direction = direction
             self.is_moving = True
-        else:
-            # Se não consegue mover, escolher nova direção imediatamente
-            valid_directions = []
-            for direction in range(4):
-                test_dx, test_dy = Direction.DELTAS[direction]
-                test_x = self.x + test_dx * self.speed
-                test_y = self.y + test_dy * self.speed
-                
-                if game_map.can_move_to(test_x, test_y, self):
-                    valid_directions.append(direction)
-            
-            if valid_directions:
-                self.direction = random.choice(valid_directions)
-                dx, dy = Direction.DELTAS[self.direction]
-                new_x = self.x + dx * self.speed
-                new_y = self.y + dy * self.speed
-                
-                self.x = new_x
-                self.y = new_y
-                self.is_moving = True
-                self.last_direction_change = current_time
+            return True
+        return False
     
-    def get_simple_escape_direction(self, game_map, bombs):
-        """Encontra direção de escape simples e rápida"""
+    def find_alternative_escape_direction(self, game_map, bombs):
         grid_x, grid_y = self.get_grid_pos()
         
-        # Testar todas as direções
+        if hasattr(self, 'escape_direction'):
+            perpendicular_dirs = [(self.escape_direction + 1) % 4, (self.escape_direction + 3) % 4]
+            
+            for direction in perpendicular_dirs:
+                if self.is_direction_safer(game_map, bombs, direction):
+                    return direction
+        
+        for direction in range(4):
+            if self.is_direction_safer(game_map, bombs, direction):
+                return direction
+        
+        return None
+    
+    def handle_normal_movement(self, game_map, bombs, current_time):
+        if not hasattr(self, 'last_direction_change'):
+            self.last_direction_change = current_time
+        
+        should_change_direction = (
+            current_time - self.last_direction_change > random.randint(1000, 2000) or
+            not self.can_continue_current_direction(game_map, bombs)
+        )
+        
+        if should_change_direction:
+            new_direction = self.choose_smart_direction(game_map, bombs)
+            if new_direction is not None:
+                self.direction = new_direction
+            self.last_direction_change = current_time
+        
+        if not self.try_move_in_direction(game_map, self.direction):
+            alternative = self.choose_smart_direction(game_map, bombs)
+            if alternative is not None:
+                self.direction = alternative
+                self.try_move_in_direction(game_map, alternative)
+                self.last_direction_change = current_time
+    
+    def can_continue_current_direction(self, game_map, bombs):
+        dx, dy = Direction.DELTAS[self.direction]
+        new_x = self.x + dx * self.speed
+        new_y = self.y + dy * self.speed
+        
+        if not game_map.can_move_to(new_x, new_y, self):
+            return False
+        
+        new_grid_x = int(new_x // TILE_SIZE)
+        new_grid_y = int(new_y // TILE_SIZE)
+        
+        for bomb in bombs:
+            distance = abs(new_grid_x - bomb.grid_x) + abs(new_grid_y - bomb.grid_y)
+            if distance <= 2 and bomb.owner == self.character:
+                return False
+        
+        return True
+    
+    def choose_smart_direction(self, game_map, bombs):
+        grid_x, grid_y = self.get_grid_pos()
+        direction_scores = {}
+        
         for direction in range(4):
             dx, dy = Direction.DELTAS[direction]
-            next_x = grid_x + dx
-            next_y = grid_y + dy
+            next_x, next_y = grid_x + dx, grid_y + dy
             
-            # Verificar se é válido e walkable
             if not (0 <= next_x < COLS and 0 <= next_y < ROWS):
                 continue
             if not game_map.is_walkable(next_x, next_y):
                 continue
             
-            # Verificar se está seguro de bombas
+            score = 50
+            
+            for bomb in bombs:
+                distance = abs(next_x - bomb.grid_x) + abs(next_y - bomb.grid_y)
+                if distance <= 3:
+                    score -= (4 - distance) * 20
+            
+            destructible_bonus = self.count_destructible_in_direction(game_map, next_x, next_y, direction)
+            score += destructible_bonus * 30
+            
+            path_length = self.calculate_path_length(game_map, next_x, next_y, direction)
+            score += path_length * 10
+            
+            if direction == self.direction:
+                score += 15
+            
+            direction_scores[direction] = score
+        
+        if not direction_scores:
+            return None
+        
+        best_direction = max(direction_scores, key=direction_scores.get)
+        return best_direction if direction_scores[best_direction] > 0 else None
+    
+    def count_destructible_in_direction(self, game_map, start_x, start_y, direction):
+        dx, dy = Direction.DELTAS[direction]
+        count = 0
+        
+        for i in range(1, 4):
+            check_x = start_x + dx * i
+            check_y = start_y + dy * i
+            
+            if not (0 <= check_x < COLS and 0 <= check_y < ROWS):
+                break
+            
+            tile_type = game_map.get_tile(check_x, check_y)
+            if tile_type == TileType.WALL:
+                break
+            elif tile_type == TileType.BRICK:
+                count += 1
+                break
+        
+        return count
+    
+    def find_safest_escape_direction(self, game_map, bombs, grid_x, grid_y):
+        direction_safety = {}
+        
+        for direction in range(4):
+            dx, dy = Direction.DELTAS[direction]
+            next_x = grid_x + dx
+            next_y = grid_y + dy
+            
+            if not (0 <= next_x < COLS and 0 <= next_y < ROWS):
+                direction_safety[direction] = -1000
+                continue
+            if not game_map.is_walkable(next_x, next_y):
+                direction_safety[direction] = -1000
+                continue
+            
+            safety_score = 100
+            
+            for bomb in bombs:
+                distance_to_bomb = abs(next_x - bomb.grid_x) + abs(next_y - bomb.grid_y)
+                if self.is_position_in_bomb_range(next_x, next_y, bomb):
+                    safety_score -= 500
+                elif distance_to_bomb <= 3:
+                    safety_score -= (4 - distance_to_bomb) * 50
+            
+            for bomb in bombs:
+                if bomb.owner == self.character:
+                    current_dist = abs(grid_x - bomb.grid_x) + abs(grid_y - bomb.grid_y)
+                    new_dist = abs(next_x - bomb.grid_x) + abs(next_y - bomb.grid_y)
+                    if new_dist > current_dist:
+                        safety_score += 100
+            
+            direction_safety[direction] = safety_score
+        
+        valid_directions = [(dir, score) for dir, score in direction_safety.items() if score > -1000]
+        if valid_directions:
+            best_direction = max(valid_directions, key=lambda x: x[1])[0]
+            return best_direction
+        
+        return None
+    
+    def choose_safe_direction(self, game_map, bombs):
+        grid_x, grid_y = self.get_grid_pos()
+        
+        direction_scores = {}
+        
+        for direction in range(4):
+            dx, dy = Direction.DELTAS[direction]
+            next_x = grid_x + dx
+            next_y = grid_y + dy
+            
+            if not (0 <= next_x < COLS and 0 <= next_y < ROWS):
+                continue
+            if not game_map.is_walkable(next_x, next_y):
+                continue
+            
+            score = 50
+            
+            for bomb in bombs:
+                if bomb.owner == self.character:
+                    distance = abs(next_x - bomb.grid_x) + abs(next_y - bomb.grid_y)
+                    if distance <= 3:
+                        score -= (4 - distance) * 30
+            
+            if direction == self.direction:
+                score += 10
+            
+            direction_scores[direction] = score
+        
+        if direction_scores:
+            best_direction = max(direction_scores, key=direction_scores.get)
+            return best_direction
+        
+        return random.randint(0, 3)
+    
+    def count_destructible_blocks_in_range(self, game_map, grid_x, grid_y):
+        destructible_count = 0
+        
+        for direction in range(4):
+            dx, dy = Direction.DELTAS[direction]
+            
+            for distance in range(1, self.bomb_range + 1):
+                check_x = grid_x + dx * distance
+                check_y = grid_y + dy * distance
+                
+                if not (0 <= check_x < COLS and 0 <= check_y < ROWS):
+                    break
+                
+                tile_type = game_map.get_tile(check_x, check_y)
+                
+                if tile_type == TileType.WALL:
+                    break
+                
+                if tile_type == TileType.BRICK:
+                    destructible_count += 1
+                    break
+        
+        return destructible_count
+    
+    def get_simple_escape_direction(self, game_map, bombs):
+        grid_x, grid_y = self.get_grid_pos()
+        
+        for direction in range(4):
+            dx, dy = Direction.DELTAS[direction]
+            next_x = grid_x + dx
+            next_y = grid_y + dy
+            
+            if not (0 <= next_x < COLS and 0 <= next_y < ROWS):
+                continue
+            if not game_map.is_walkable(next_x, next_y):
+                continue
+            
             is_safe = True
             for bomb in bombs:
                 if self.is_position_in_bomb_range(next_x, next_y, bomb):
@@ -1335,7 +1449,6 @@ class Enemy:
             if is_safe:
                 return direction
         
-        # Se nenhuma direção é completamente segura, escolher a menos perigosa
         best_direction = None
         min_danger = float('inf')
         
@@ -1349,12 +1462,11 @@ class Enemy:
             if not game_map.is_walkable(next_x, next_y):
                 continue
             
-            # Calcular nível de perigo
             danger = 0
             for bomb in bombs:
                 if self.is_position_in_bomb_range(next_x, next_y, bomb):
                     distance = abs(next_x - bomb.grid_x) + abs(next_y - bomb.grid_y)
-                    danger += (5 - distance)  # Quanto mais próximo, mais perigoso
+                    danger += (5 - distance)
             
             if danger < min_danger:
                 min_danger = danger
@@ -1363,7 +1475,6 @@ class Enemy:
         return best_direction
     
     def move_in_direction(self, game_map, direction):
-        """Move o inimigo na direção especificada"""
         dx, dy = Direction.DELTAS[direction]
         new_x = self.x + dx * self.speed
         new_y = self.y + dy * self.speed
@@ -1377,24 +1488,20 @@ class Enemy:
         return False
     
     def assess_immediate_danger(self, bombs):
-        """Avalia se há perigo imediato de explosão"""
         grid_x, grid_y = self.get_grid_pos()
         
         for bomb in bombs:
             if self.is_position_in_bomb_range(grid_x, grid_y, bomb):
-                # Verificar tempo restante da bomba
                 time_left = BOMB_TIMER - (pygame.time.get_ticks() - bomb.timer)
-                if time_left < 1500:  # Apenas menos de 1.5 segundos = perigo REAL
+                if time_left < 1500:
                     return True
         
         return False
     
     def get_cautious_direction(self, game_map, bombs, player):
-        """Movimento cauteloso que evita bombas mas não foge completamente"""
         grid_x, grid_y = self.get_grid_pos()
         player_grid_x, player_grid_y = player.get_grid_pos()
         
-        # Avaliar direções baseado em segurança e distância do jogador
         direction_scores = {}
         
         for direction in range(4):
@@ -1407,33 +1514,28 @@ class Enemy:
             if not game_map.is_walkable(next_x, next_y):
                 continue
             
-            score = 50  # Score base
+            score = 50
             
-            # Penalizar proximidade com bombas
             for bomb in bombs:
                 bomb_distance = abs(next_x - bomb.grid_x) + abs(next_y - bomb.grid_y)
                 if bomb_distance <= 3:
                     score -= (4 - bomb_distance) * 20
             
-            # Não se afastar muito do jogador (manter pressão)
             player_distance = abs(next_x - player_grid_x) + abs(next_y - player_grid_y)
             if player_distance > 6:
                 score -= 10
             elif 3 <= player_distance <= 5:
-                score += 20  # Distância ideal
+                score += 20
             
             direction_scores[direction] = score
         
-        # Escolher melhor direção
         if direction_scores:
             best_direction = max(direction_scores, key=direction_scores.get)
             return best_direction
         
-        return random.randint(0, 3)  # Fallback
+        return random.randint(0, 3)
     
     def try_alternative_movement(self, game_map, preferred_direction):
-        """Tenta movimentos alternativos quando a direção preferida está bloqueada"""
-        # Tentar direções perpendiculares primeiro (evitar voltar)
         perpendicular_dirs = []
         opposite_dir = (preferred_direction + 2) % 4
         
@@ -1441,7 +1543,6 @@ class Enemy:
             if direction != preferred_direction and direction != opposite_dir:
                 perpendicular_dirs.append(direction)
         
-        # Tentar direções perpendiculares
         for direction in perpendicular_dirs:
             dx, dy = Direction.DELTAS[direction]
             new_x = self.x + dx * self.speed
@@ -1454,7 +1555,6 @@ class Enemy:
                 self.is_moving = True
                 return
         
-        # Como último recurso, tentar direção oposta
         dx, dy = Direction.DELTAS[opposite_dir]
         new_x = self.x + dx * self.speed
         new_y = self.y + dy * self.speed
@@ -1466,52 +1566,44 @@ class Enemy:
             self.is_moving = True
     
     def update_mode_intelligently(self, player, bombs, current_time):
-        """Atualiza o modo do inimigo baseado na situação atual"""
         grid_x, grid_y = self.get_grid_pos()
         player_grid_x, player_grid_y = player.get_grid_pos()
         distance_to_player = abs(grid_x - player_grid_x) + abs(grid_y - player_grid_y)
         
-        # Verificar se há bombas próximas
         bombs_nearby = any(
             abs(bomb.grid_x - grid_x) + abs(bomb.grid_y - grid_y) <= 4 
             for bomb in bombs
         )
         
-        # Lógica de mudança de modo
         if bombs_nearby:
             if self.mode != "flee":
                 self.mode = "flee"
         elif distance_to_player <= 6:
-            if random.random() < 0.1:  # 10% chance de mudar para ataque
+            if random.random() < 0.1:
                 self.mode = "attack"
         elif distance_to_player > 8:
-            if random.random() < 0.05:  # 5% chance de explorar
+            if random.random() < 0.05:
                 self.mode = "explore"
+    
     def find_destructible_block_nearby(self, game_map):
-        """Encontra blocos destrutíveis adjacentes e garante fuga segura SIMPLES"""
         grid_x, grid_y = self.get_grid_pos()
         
-        # Verificar posições adjacentes para blocos destrutíveis
         adjacent_checks = [
-            (grid_x + 1, grid_y, Direction.LEFT),    # bloco à direita, fuga à esquerda  
-            (grid_x - 1, grid_y, Direction.RIGHT),   # bloco à esquerda, fuga à direita
-            (grid_x, grid_y + 1, Direction.UP),      # bloco abaixo, fuga acima
-            (grid_x, grid_y - 1, Direction.DOWN)     # bloco acima, fuga abaixo
+            (grid_x + 1, grid_y, Direction.LEFT),
+            (grid_x - 1, grid_y, Direction.RIGHT),
+            (grid_x, grid_y + 1, Direction.UP),
+            (grid_x, grid_y - 1, Direction.DOWN)
         ]
         
         for block_x, block_y, escape_dir in adjacent_checks:
-            # Verificar se o bloco destrutível existe e está nos limites
             if not (0 <= block_x < COLS and 0 <= block_y < ROWS):
                 continue
                 
-            # Verificar se há bloco destrutível nesta posição
             if game_map.get_tile(block_x, block_y) == TileType.BRICK:
-                # Calcular posição de fuga (1 tile na direção de escape)
                 escape_dx, escape_dy = Direction.DELTAS[escape_dir]
                 escape_x = grid_x + escape_dx
                 escape_y = grid_y + escape_dy
                 
-                # Verificar se posição de fuga está nos limites e é walkable
                 if (0 <= escape_x < COLS and 0 <= escape_y < ROWS and 
                     game_map.is_walkable(escape_x, escape_y)):
                     
@@ -1526,14 +1618,12 @@ class Enemy:
         return None
 
     def get_grid_pos(self):
-        """Retorna a posição no grid"""
         return (
             int((self.x + TILE_SIZE // 2) // TILE_SIZE),
             int((self.y + TILE_SIZE // 2) // TILE_SIZE)
         )
     
     def get_rect(self):
-        """Retorna o retângulo de colisão"""
         return pygame.Rect(self.x, self.y, TILE_SIZE, TILE_SIZE)
 
 class Bomb:
@@ -1546,32 +1636,25 @@ class Bomb:
         self.owner = owner
         self.timer = pygame.time.get_ticks()
         
-        # Animação
         self.animation_timer = 0
         self.blinking = False
     
     def update(self, dt, game_map, player):
-        """Atualiza a bomba"""
         current_time = pygame.time.get_ticks()
         elapsed = current_time - self.timer
         
-        # Animação de piscar
         self.animation_timer += dt
         blink_rate = max(100, 1000 - elapsed)
         self.blinking = (elapsed // blink_rate) % 2 == 0
         
-        # Verificar se é hora de explodir
         return elapsed >= BOMB_TIMER
     
     def explode(self, game_map):
-        """Cria uma explosão"""
         explosion_tiles = []
         
-        # Centro da explosão
         explosion_tiles.append((self.grid_x, self.grid_y))
         game_map.set_tile(self.grid_x, self.grid_y, TileType.EXPLOSION)
         
-        # Expandir nas 4 direções
         for direction in range(4):
             dx, dy = Direction.DELTAS[direction]
             
@@ -1579,26 +1662,21 @@ class Bomb:
                 x = self.grid_x + dx * i
                 y = self.grid_y + dy * i
                 
-                # Verificar limites
                 if not (0 <= x < COLS and 0 <= y < ROWS):
                     break
                 
                 tile_type = game_map.get_tile(x, y)
                 
-                # PARAR IMEDIATAMENTE na parede (não atravessar)
                 if tile_type == TileType.WALL:
                     break
                 
-                # Destruir tijolo e parar COMPLETAMENTE
                 if tile_type == TileType.BRICK:
                     game_map.set_tile(x, y, TileType.EXPLOSION)
                     explosion_tiles.append((x, y))
-                    # Chance de criar power-up
                     if random.random() < 0.3:
                         game_map.add_powerup_at(x, y)
-                    break  # ⛔ PARAR AQUI - não continuar além do bloco destrutível
+                    break
                 
-                # Adicionar à explosão (apenas se for espaço vazio)
                 if tile_type == TileType.EMPTY:
                     game_map.set_tile(x, y, TileType.EXPLOSION)
                     explosion_tiles.append((x, y))
@@ -1608,28 +1686,25 @@ class Bomb:
 class Explosion:
     def __init__(self, tiles, bomb_x, bomb_y):
         self.tiles = tiles
-        self.bomb_x = bomb_x  # Posição original da bomba
-        self.bomb_y = bomb_y  # Posição original da bomba
+        self.bomb_x = bomb_x
+        self.bomb_y = bomb_y
         self.timer = pygame.time.get_ticks()
         self.animation_timer = 0
         self.animation_frame = 0
     
     def update(self, dt, game_map):
-        """Atualiza a explosão"""
         current_time = pygame.time.get_ticks()
         self.animation_timer += dt
         
-        if self.animation_timer > 100:  # Animação rápida
+        if self.animation_timer > 100:
             self.animation_frame = (self.animation_frame + 1) % 4
             self.animation_timer = 0
         
-        # Verificar se a explosão acabou
         if current_time - self.timer >= EXPLOSION_DURATION:
-            # Remover explosão do mapa
             for x, y in self.tiles:
                 if game_map.get_tile(x, y) == TileType.EXPLOSION:
                     game_map.set_tile(x, y, TileType.EMPTY)
-            return True  # Explosão terminada
+            return True
         
         return False
 
@@ -1644,23 +1719,18 @@ class PowerUp:
         self.animation_frame = 0
     
     def update(self, dt):
-        """Atualiza o power-up"""
         self.animation_timer += dt
-        if self.animation_timer > 500:  # Animação lenta
+        if self.animation_timer > 500:
             self.animation_frame = (self.animation_frame + 1) % 2
             self.animation_timer = 0
     
     def get_rect(self):
-        """Retorna o retângulo de colisão"""
         return pygame.Rect(self.x, self.y, TILE_SIZE, TILE_SIZE)
     
     def apply_to_player(self, player):
-        """Aplica o efeito do power-up ao jogador"""
         if self.type == TileType.POWERUP_BOMB:
             player.max_bombs += 1
         elif self.type == TileType.POWERUP_RANGE:
             player.bomb_range += 1
         elif self.type == TileType.POWERUP_SPEED:
-            player.speed = min(player.speed + 0.5, 4)  # Limite máximo de velocidade
-
-
+            player.speed = min(player.speed + 0.5, 4)

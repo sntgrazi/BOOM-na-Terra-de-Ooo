@@ -27,7 +27,7 @@ def main():
     pygame.mixer.init(frequency=22050, size=-16, channels=2, buffer=512)
 
     screen = pygame.display.set_mode((800, 600))
-    pygame.display.set_caption("Bomberman Clone - Adventure Time Edition")
+    pygame.display.set_caption("BOOM na Terra de Ooo")
 
     try:
         icon_path = os.path.join("images", "Finn-frame1.png")
@@ -39,8 +39,6 @@ def main():
 
     game = BombermanGame(screen)
     game.run()
-    
-    # Finalizar
     pygame.quit()
     sys.exit()
 

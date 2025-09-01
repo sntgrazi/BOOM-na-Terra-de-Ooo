@@ -15,14 +15,13 @@ class AudioManager:
         self.sfx_channel = pygame.mixer.Channel(0)
         self.music_channel = pygame.mixer.Channel(1)
         
-        # Carregar sons personalizados
         self.custom_sounds = {}
         self.load_custom_sounds()
         
         print("🔊 Sistema de áudio inicializado")
     
     def load_custom_sounds(self):
-        """Carrega os sons personalizados do diretório sounds/"""
+        
         import os
         
         sound_files = {
@@ -116,17 +115,17 @@ class AudioManager:
         return pygame.sndarray.make_sound(stereo_arr)
     
     def play_bomb_sound(self):
-        """Toca som ao colocar uma bomba"""
+        
         if self.is_muted:
             return
         
         try:
-            # Tentar usar som personalizado primeiro
+            
             if self.custom_sounds.get('bomb_place'):
                 self.sfx_channel.play(self.custom_sounds['bomb_place'])
                 print("🔊 Tocando som personalizado da bomba")
             else:
-                # Fallback para som gerado
+                
                 sound = self.generate_tone(150, 0.2, 'square', 0.3)
                 self.sfx_channel.play(sound)
                 print("🔊 Tocando som gerado da bomba")
@@ -134,17 +133,17 @@ class AudioManager:
             print(f"❌ Erro ao tocar som da bomba: {e}")
     
     def play_explosion_sound(self):
-        """Toca som da explosão"""
+        
         if self.is_muted:
             return
         
         try:
-            # Tentar usar som personalizado primeiro
+           
             if self.custom_sounds.get('explosion'):
                 self.sfx_channel.play(self.custom_sounds['explosion'])
                 print("💥 Tocando som personalizado da explosão")
             else:
-                # Fallback para som gerado
+              
                 noise = self.generate_noise(0.5, 0.4)
                 self.sfx_channel.play(noise)
                 print("💥 Tocando som gerado da explosão")
