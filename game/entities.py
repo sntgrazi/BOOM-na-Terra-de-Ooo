@@ -71,11 +71,13 @@ class Enemy:
         
         print(f"🤖 Inimigo {character} criado com cooldown inicial de {self.bomb_cooldown}ms")
         
-    def update(self, dt, game_map, player, bombs):
+    def update(self, dt, game_map, player, bombs, bomb_coordinator=None):
         if not self.alive:
             return
         
         current_time = pygame.time.get_ticks()
+        
+        self.check_powerup_collection(game_map)
         
         self.update_ai_mode(player, bombs, current_time)
         
@@ -108,28 +110,85 @@ class Enemy:
                     reason = "exploração aleatória"
                 
                 if should_place_bomb:
-                    escape_routes = 0
-                    best_escape_direction = None
-                    
-                    for direction in range(4):
-                        dx, dy = Direction.DELTAS[direction]
-                        test_x, test_y = grid_x + dx, grid_y + dy
+                    if bomb_coordinator and bomb_coordinator.can_enemy_place_bomb(self, [], bombs, game_map):
+                        safe_escape_routes = self.analyze_safe_escape_routes(game_map, bombs, grid_x, grid_y)
                         
-                        if (0 <= test_x < COLS and 0 <= test_y < ROWS and 
-                            game_map.is_walkable(test_x, test_y)):
-                            escape_routes += 1
-                            if best_escape_direction is None:
-                                best_escape_direction = direction
-                    
-                    if escape_routes >= 1:
-                        if self.place_bomb(game_map, bombs, current_time):
-                            self.escape_direction = best_escape_direction
-                            self.escape_mode_until = current_time + 4000
-                            print(f"💣✅ {self.character} colocou bomba para {reason}")
-                        
-                        self.bomb_cooldown = random.randint(2000, 3500)
+                        if len(safe_escape_routes) >= 1:
+                            if self.place_bomb(game_map, bombs, current_time):
+                                bomb_coordinator.register_bomb_placement(self)
+                                best_route = safe_escape_routes[0]
+                                self.escape_direction = best_route['direction']
+                                self.escape_mode_until = current_time + 4000
+                                print(f"💣✅ {self.character} colocou bomba coordenada para {reason}")
+                            
+                            self.bomb_cooldown = random.randint(3000, 5000)
+                        else:
+                            print(f"💣❌ {self.character} cancelou - sem rotas seguras")
+                            self.bomb_cooldown = random.randint(1000, 2000)
+                    else:
+                        if bomb_coordinator:
+                            print(f"💣⏳ {self.character} aguardando vez para colocar bomba")
+                        self.bomb_cooldown = random.randint(500, 1500)
         
         self.update_movement(game_map, bombs, player, current_time)
+    
+    def analyze_safe_escape_routes(self, game_map, bombs, grid_x, grid_y):
+        safe_routes = []
+        
+        for direction in range(4):
+            dx, dy = Direction.DELTAS[direction]
+            
+            for distance in range(1, 5):
+                test_x = grid_x + dx * distance
+                test_y = grid_y + dy * distance
+                
+                if not (0 <= test_x < COLS and 0 <= test_y < ROWS):
+                    break
+                
+                if not game_map.is_walkable(test_x, test_y):
+                    break
+                
+                is_safe = True
+                
+                for bomb in bombs:
+                    if self.is_position_dangerous(test_x, test_y, bomb):
+                        is_safe = False
+                        break
+                
+                if (test_x == grid_x and abs(test_y - grid_y) <= self.bomb_range) or \
+                   (test_y == grid_y and abs(test_x - grid_x) <= self.bomb_range):
+                    if distance <= 3:
+                        is_safe = False
+                
+                if is_safe:
+                    safe_routes.append({
+                        'direction': direction,
+                        'position': (test_x, test_y),
+                        'distance': distance
+                    })
+                    break
+        
+        return safe_routes
+    
+    def is_position_dangerous(self, x, y, bomb):
+        if y == bomb.grid_y:
+            distance = abs(x - bomb.grid_x)
+            if distance <= bomb.explosion_range:
+                return True
+        
+        if x == bomb.grid_x:
+            distance = abs(y - bomb.grid_y)
+            if distance <= bomb.explosion_range:
+                return True
+        
+        return False
+    
+    def check_powerup_collection(self, game_map):
+        grid_x, grid_y = self.get_grid_pos()
+        powerup = game_map.get_powerup(grid_x, grid_y)
+        
+        if powerup and powerup.apply_to_enemy(self):
+            game_map.remove_powerup(grid_x, grid_y)
     
     def update_ai_mode(self, player, bombs, current_time):
         if random.random() < 0.01:
@@ -1734,3 +1793,15 @@ class PowerUp:
             player.bomb_range += 1
         elif self.type == TileType.POWERUP_SPEED:
             player.speed = min(player.speed + 0.5, 4)
+    
+    def apply_to_enemy(self, enemy):
+        if self.type == TileType.POWERUP_BOMB:
+            enemy.max_bombs += 1
+            return True
+        elif self.type == TileType.POWERUP_RANGE:
+            enemy.bomb_range = min(enemy.bomb_range + 1, 5)
+            return True
+        elif self.type == TileType.POWERUP_SPEED:
+            enemy.speed = min(enemy.speed + 0.3, 3.0)
+            return True
+        return False

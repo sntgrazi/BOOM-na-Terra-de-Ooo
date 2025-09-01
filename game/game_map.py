@@ -417,5 +417,18 @@ class GameMap:
                         safe_positions.append((x, y))
         
         return safe_positions
+    
+    def get_powerup(self, grid_x, grid_y):
+        for powerup in self.powerups:
+            if powerup.grid_x == grid_x and powerup.grid_y == grid_y:
+                return powerup
+        return None
+    
+    def remove_powerup(self, grid_x, grid_y):
+        for i, powerup in enumerate(self.powerups):
+            if powerup.grid_x == grid_x and powerup.grid_y == grid_y:
+                self.powerups.pop(i)
+                return True
+        return False
 
 

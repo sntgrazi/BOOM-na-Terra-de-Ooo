@@ -8,6 +8,76 @@ from .ui import UI
 from .game_map import GameMap
 from .entities import Player, Enemy, Bomb, Explosion
 
+class EnemyBombCoordinator:
+    def __init__(self):
+        self.current_bomber = None
+        self.bomb_cooldown_time = 0
+        
+    def can_enemy_place_bomb(self, enemy, enemies, bombs, game_map):
+        if self.current_bomber is not None and self.current_bomber != enemy:
+            return False
+            
+        if pygame.time.get_ticks() < self.bomb_cooldown_time:
+            return False
+            
+        return self.is_safe_to_bomb(enemy, enemies, bombs, game_map)
+    
+    def register_bomb_placement(self, enemy):
+        self.current_bomber = enemy
+        self.bomb_cooldown_time = pygame.time.get_ticks() + 3000
+        
+    def clear_current_bomber(self):
+        if self.current_bomber and pygame.time.get_ticks() > self.bomb_cooldown_time:
+            self.current_bomber = None
+    
+    def is_safe_to_bomb(self, enemy, enemies, bombs, game_map):
+        grid_x, grid_y = enemy.get_grid_pos()
+        
+        safe_escape_routes = 0
+        for direction in range(4):
+            dx, dy = Direction.DELTAS[direction]
+            
+            for distance in range(1, 5):
+                test_x = grid_x + dx * distance
+                test_y = grid_y + dy * distance
+                
+                if not (0 <= test_x < COLS and 0 <= test_y < ROWS):
+                    break
+                
+                if not game_map.is_walkable(test_x, test_y):
+                    break
+                
+                will_be_safe = True
+                
+                for bomb in bombs:
+                    if self.is_position_in_bomb_range(test_x, test_y, bomb):
+                        will_be_safe = False
+                        break
+                
+                if (test_x == grid_x and abs(test_y - grid_y) <= enemy.bomb_range) or \
+                   (test_y == grid_y and abs(test_x - grid_x) <= enemy.bomb_range):
+                    if distance <= 3:
+                        will_be_safe = False
+                
+                if will_be_safe:
+                    safe_escape_routes += 1
+                    break
+        
+        return safe_escape_routes >= 2
+    
+    def is_position_in_bomb_range(self, x, y, bomb):
+        if y == bomb.grid_y:
+            distance = abs(x - bomb.grid_x)
+            if distance <= bomb.explosion_range:
+                return True
+        
+        if x == bomb.grid_x:
+            distance = abs(y - bomb.grid_y)
+            if distance <= bomb.explosion_range:
+                return True
+        
+        return False
+
 class BombermanGame:
     def __init__(self, screen):
         self.screen = screen
@@ -35,6 +105,8 @@ class BombermanGame:
        
         self.keys = {}
         self.key_pressed = {}
+        
+        self.enemy_bomb_coordinator = EnemyBombCoordinator()
         
         print("🎮 Jogo BOOM na Terra de Ooo inicializado!")
     
@@ -221,7 +293,7 @@ class BombermanGame:
         elif self.state == GameState.CHARACTER_SELECT:
             
             for enemy in self.enemies:
-                enemy.update(dt, self.game_map, self.player, self.bombs)
+                enemy.update(dt, self.game_map, self.player, self.bombs, self.enemy_bomb_coordinator)
     
     def update_game(self, dt):
         
@@ -231,9 +303,11 @@ class BombermanGame:
         self.update_player(dt)
         
         
+        self.enemy_bomb_coordinator.clear_current_bomber()
+        
         for enemy in self.enemies[:]:  
             if enemy.alive:
-                enemy.update(dt, self.game_map, self.player, self.bombs)
+                enemy.update(dt, self.game_map, self.player, self.bombs, self.enemy_bomb_coordinator)
         
         
         self.update_bombs(dt)
@@ -489,9 +563,9 @@ class BombermanGame:
         print(f"🎯 Total de inimigos criados: {len(self.enemies)}")
         
         if len(self.enemies) == 0:
-            print("💀 ERRO CRÍTICO: Nenhum inimigo pôde ser criado!")
+            pass
         elif len(self.enemies) < 3:
-            print(f"⚠️ AVISO: Apenas {len(self.enemies)}/3 inimigos criados")
+            pass
     
     def restart_game(self):
        
